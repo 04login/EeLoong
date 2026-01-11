@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+@keyframes tw-typewriter {
+  to {
+    left: 100%;
+  }
+}
+
+@keyframes tw-caret-blink {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.typewriter {
+  position: relative;
+  display: inline-block;
+  width: max-content;
+  white-space: nowrap;
+}
+
+.typewriter::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: -0.12em;
+  background: rgb(2 6 23);
+  animation: tw-typewriter var(--tw-typewriter-duration, 2.8s) steps(var(--tw-typewriter-steps, 30)) forwards;
+}
+
+.typewriter::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: -0.12em;
+  width: 0.14em;
+  background: currentColor;
+  animation:
+    tw-typewriter var(--tw-typewriter-duration, 2.8s) steps(var(--tw-typewriter-steps, 30)) forwards,
+    tw-caret-blink 0.9s step-end 3 var(--tw-typewriter-duration, 2.8s) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typewriter::before,
+  .typewriter::after {
+    animation: none;
+  }
+  .typewriter::after {
+    opacity: 0;
+  }
+}

@@ -1,5 +1,28 @@
 ---
+import '../styles/global.css';
 
+import { me } from '../data/profile.ts';
+
+const projects = [
+	{
+		title: 'Project One',
+		desc: 'Brief one-liner about what this project does and who it helps.',
+		link: '#',
+		stack: ['Astro', 'Tailwind', 'TypeScript'],
+	},
+	{
+		title: 'Project Two',
+		desc: 'A concise description that highlights the impact or metric.',
+		link: '#',
+		stack: ['React', 'Node', 'PostgreSQL'],
+	},
+	{
+		title: 'Project Three',
+		desc: 'Explain the problem you solved and the approach you took.',
+		link: '#',
+		stack: ['Design System', 'Accessibility'],
+	},
+];
 ---
 
 <html lang="en">
@@ -8,9 +31,80 @@
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
+		<title>{me.name} · Portfolio</title>
 	</head>
-	<body>
-		<h1>Astro</h1>
+	<body class="min-h-screen bg-slate-950 text-slate-50">
+		<div class="mx-auto flex  flex-col gap-16 px-6 py-16 lg:py-24">
+			<header class="flex flex-col gap-6">
+				<p class="text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">Portfolio</p>
+				<div class="flex flex-col gap-3">
+					<h1 class="text-4xl font-semibold leading-tight sm:text-5xl typewriter">Hi I'm {me.name}</h1>
+					<p class="text-lg text-slate-200">
+						{me.title} · {me.location}
+					</p>
+					<p class="max-w-2xl text-base text-slate-300">{me.intro}</p>
+				</div>
+				<div class="flex flex-wrap items-center gap-3 text-sm text-slate-300">
+					<span class="rounded-full border border-slate-800 bg-slate-900 px-3 py-1">Available for work</span>
+					<a class="rounded-full bg-emerald-500 px-3 py-1 font-medium text-slate-950 transition hover:bg-emerald-400" href="mailto:you@example.com">Contact</a>
+					<a class="rounded-full border border-slate-800 px-3 py-1 transition hover:border-slate-600" href="#projects">View work</a>
+				</div>
+			</header>
+
+			<main class="flex flex-col gap-16">
+				<section class="flex flex-col gap-4" id="about">
+					<p class="text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">About</p>
+					<div class="flex flex-col gap-3">
+						<h2 class="text-2xl font-semibold">A short bio</h2>
+						<p class="max-w-3xl text-base text-slate-300">
+							Write a few sentences about your focus, how you work, and the kinds of problems you enjoy solving. Keep it concise and concrete.
+						</p>
+					</div>
+				</section>
+
+				<section class="flex flex-col gap-6" id="projects">
+					<div class="flex items-center justify-between gap-4">
+						<div class="flex flex-col gap-2">
+							<p class="text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">Projects</p>
+							<h2 class="text-2xl font-semibold">Selected work</h2>
+						</div>
+						<a class="text-sm font-medium text-emerald-400 underline-offset-4 hover:underline" href="#">All projects</a>
+					</div>
+					<div class="grid gap-6 md:grid-cols-2">
+						{projects.map((project) => (
+							<article class="flex flex-col gap-3 rounded-2xl border border-slate-900 bg-slate-900/40 p-6 shadow-[0_12px_40px_-24px_rgba(0,0,0,0.8)] transition hover:border-slate-700 hover:bg-slate-900/60">
+								<div class="flex items-center justify-between gap-3">
+									<h3 class="text-xl font-semibold text-slate-50">{project.title}</h3>
+									<a class="text-sm font-medium text-emerald-400 underline-offset-4 hover:underline" href={project.link}>View</a>
+								</div>
+								<p class="text-sm text-slate-300">{project.desc}</p>
+								<ul class="flex flex-wrap gap-2 text-xs text-slate-300">
+									{project.stack.map((tech) => (
+										<li class="rounded-full border border-slate-800 bg-slate-900 px-3 py-1">{tech}</li>
+									))}
+								</ul>
+							</article>
+						))}
+					</div>
+				</section>
+
+				<section class="flex flex-col gap-4" id="contact">
+					<p class="text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">Contact</p>
+					<div class="flex flex-col gap-3">
+						<h2 class="text-2xl font-semibold">Let’s work together</h2>
+						<p class="max-w-2xl text-base text-slate-300">Have a project or role in mind? Drop a line and I’ll get back soon.</p>
+						<div class="flex flex-wrap gap-3 text-sm font-medium">
+							<a class="rounded-full bg-emerald-500 px-4 py-2 text-slate-950 transition hover:bg-emerald-400" href="mailto:you@example.com">Email</a>
+							<a class="rounded-full border border-slate-800 px-4 py-2 text-slate-50 transition hover:border-slate-600" href="https://www.linkedin.com">LinkedIn</a>
+							<a class="rounded-full border border-slate-800 px-4 py-2 text-slate-50 transition hover:border-slate-600" href="https://github.com">GitHub</a>
+						</div>
+					</div>
+				</section>
+			</main>
+
+			<footer class="border-t border-slate-900 pt-8 text-sm text-slate-500">
+				<p>© {new Date().getFullYear()} {me.name}. Built with Astro & Tailwind.</p>
+			</footer>
+		</div>
 	</body>
 </html>
