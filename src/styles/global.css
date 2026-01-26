@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+:root {
+  /* Core palette */
+  --ink-900: #171717;
+  --ink-700: #444444;
+  --accent: #da0037;
+  --paper: #ededed;
+
+  /* RGB helpers */
+  --ink-900-rgb: 23, 23, 23;
+  --ink-700-rgb: 68, 68, 68;
+  --accent-rgb: 218, 0, 55;
+  --paper-rgb: 237, 237, 237;
+}
+
 @keyframes tw-typewriter {
   to {
     left: 100%;
@@ -32,7 +46,7 @@
   left: 0;
   right: 0;
   bottom: -0.12em;
-  background: rgb(2 6 23);
+  background: var(--paper);
   animation: tw-typewriter var(--tw-typewriter-duration, 2.8s) steps(var(--tw-typewriter-steps, 30)) forwards;
 }
 
