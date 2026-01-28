@@ -1,17 +1,51 @@
 @import "tailwindcss";
 
 :root {
-  /* Core palette */
+  /* Core palette – Ink (dark grays) */
   --ink-900: #171717;
+  --ink-850: #1f1f1f;
+  --ink-800: #262626;
+  --ink-750: #353535;
   --ink-700: #444444;
-  --accent: #da0037;
+  --ink-650: #4b4b4b;
+  --ink-600: #525252;
+  --ink-550: #636363;
+  --ink-500: #737373;
+  --ink-450: #8b8b8b;
+  --ink-400: #a3a3a3;
+
+  /* Core palette – Paper (light tones) */
   --paper: #ededed;
+  --paper-muted: #d4d4d4;
+  --paper-dim: #a1a1a1;
+
+  /* Accent colors */
+  --accent: #da0037;
+  --accent-light: #ff2d5a;
+  --accent-dark: #a8002a;
+
+  /* Utility colors */
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --info: #3b82f6;
 
   /* RGB helpers */
   --ink-900-rgb: 23, 23, 23;
+  --ink-850-rgb: 31, 31, 31;
+  --ink-800-rgb: 38, 38, 38;
+  --ink-750-rgb: 53, 53, 53;
   --ink-700-rgb: 68, 68, 68;
-  --accent-rgb: 218, 0, 55;
+  --ink-650-rgb: 75, 75, 75;
+  --ink-600-rgb: 82, 82, 82;
+  --ink-550-rgb: 99, 99, 99;
+  --ink-500-rgb: 115, 115, 115;
+  --ink-450-rgb: 139, 139, 139;
+  --ink-400-rgb: 163, 163, 163;
   --paper-rgb: 237, 237, 237;
+  --paper-muted-rgb: 212, 212, 212;
+  --accent-rgb: 218, 0, 55;
+  --accent-light-rgb: 255, 45, 90;
+  --accent-dark-rgb: 168, 0, 42;
 }
 
 @keyframes tw-typewriter {
@@ -29,6 +63,26 @@
   }
   100% {
     opacity: 0;
+  }
+}
+
+@keyframes progression-pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes progression-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
   }
 }
 
