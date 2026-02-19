@@ -64,14 +64,14 @@ const nameStack = me.name.trim().replace(/\s+/g, "\n");
 						<!-- Timeline wrapper -->
 							<div class="relative px-2 md:px-8">
 								<!-- Progress bar - horizontal on desktop, vertical on mobile -->
-								<div
+								<!-- <div
 									class="absolute hidden md:block top-1/2 left-0 right-0 h-[2px] bg-gradient-to-r from-[color:var(--accent)] via-[color:var(--ink-500)] to-[color:var(--accent)] bg-[length:200%_100%]"
 									style="animation: progression-flow 5s linear infinite;"
 								></div>
 								<div
 									class="absolute md:hidden left-1/2 top-0 bottom-0 w-[2px] -translate-x-1/2 bg-gradient-to-b from-[color:var(--accent)] via-[color:var(--ink-500)] to-[color:var(--accent)] bg-[length:100%_200%]"
 									style="animation: progression-flow 5s linear infinite;"
-								></div>
+								></div> -->
 								
 								<!-- Cards container -->
 								<div class="relative flex flex-col md:flex-row gap-8 md:gap-25">
@@ -336,8 +336,9 @@ const nameStack = me.name.trim().replace(/\s+/g, "\n");
 				<div
 					class="fixed lg:static bottom-0 left-0 right-0 z-50 bg-[color:var(--ink-900)] flex min-h-auto lg:min-h-screen flex-col items-start justify-center gap-3 md:gap-4 p-5 md:p-10 text-left lg:sticky lg:top-0 lg:self-start lg:order-2 border-t lg:border-t-0 border-[color:var(--ink-700)]"
 				>
-					<div class="text-5xl md:text-7xl lg:text-9xl font-semibold whitespace-pre-line">
-						{nameStack}
+					<div class="text-5xl md:text-7xl lg:text-9xl font-semibold">
+						<span class="lg:hidden">{me.name}</span>
+						<span class="hidden lg:block whitespace-pre-line">{nameStack}</span>
 					</div>
 					<div class="flex gap-2 md:gap-3 text-sm">
 						<a
