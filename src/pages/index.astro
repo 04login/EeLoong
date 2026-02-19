@@ -42,14 +42,14 @@ const nameStack = me.name.trim().replace(/\s+/g, "\n");
 		class="min-h-screen bg-[color:var(--ink-900)] text-[color:var(--paper)]"
 	>
 		<main class="min-h-screen">
-			<div class="grid min-h-screen grid-cols-[1fr_auto]">
-				<div class="flex flex-col justify-start gap-0 px-5 py-5">
+			<div class="grid min-h-screen grid-cols-1 lg:grid-cols-[1fr_auto]">
+				<div class="flex flex-col justify-start gap-0 px-3 py-3 md:px-5 md:py-5 lg:order-1 pb-32 lg:pb-5">
 					<!-- Education section -->
 					<div
-						class="flex-1 flex flex-col gap-10 py-8 bg-[color:var(--ink-900)]"
+						class="flex-1 flex flex-col gap-6 md:gap-10 py-4 md:py-8 bg-[color:var(--ink-900)]"
 					>
 					<!-- Wrap header in a flex for side by side -->
-					<div class="flex items-center gap-5">
+					<div class="flex items-center gap-3 md:gap-5">
 						<iconify-icon
 							icon="material-symbols:school"
 							class="text-[color:var(--paper-dim)] text-xl"
@@ -62,15 +62,19 @@ const nameStack = me.name.trim().replace(/\s+/g, "\n");
 					</div>
 						
 						<!-- Timeline wrapper -->
-						<div class="relative px-8">
-							<!-- Progress bar -->
-							<div
-								class="absolute top-1/2 left-0 right-0 h-[2px] bg-gradient-to-r from-[color:var(--accent)] via-[color:var(--ink-500)] to-[color:var(--accent)] bg-[length:200%_100%]"
-								style="animation: progression-flow 5s linear infinite;"
-							></div>
-							
-							<!-- Cards container -->
-							<div class="relative flex gap-25">
+							<div class="relative px-2 md:px-8">
+								<!-- Progress bar - horizontal on desktop, vertical on mobile -->
+								<div
+									class="absolute hidden md:block top-1/2 left-0 right-0 h-[2px] bg-gradient-to-r from-[color:var(--accent)] via-[color:var(--ink-500)] to-[color:var(--accent)] bg-[length:200%_100%]"
+									style="animation: progression-flow 5s linear infinite;"
+								></div>
+								<div
+									class="absolute md:hidden left-1/2 top-0 bottom-0 w-[2px] -translate-x-1/2 bg-gradient-to-b from-[color:var(--accent)] via-[color:var(--ink-500)] to-[color:var(--accent)] bg-[length:100%_200%]"
+									style="animation: progression-flow 5s linear infinite;"
+								></div>
+								
+								<!-- Cards container -->
+								<div class="relative flex flex-col md:flex-row gap-8 md:gap-25">
 								{education.map((edu) => (
 									<div
 										class="relative flex flex-col items-center gap-2 p-4 border border-[color:var(--ink-300)] rounded-xl bg-white transition hover:border-[color:var(--accent)] hover:shadow-lg hover:shadow-[color:var(--accent)]/10"
@@ -330,14 +334,14 @@ const nameStack = me.name.trim().replace(/\s+/g, "\n");
 					</div>
 				</div>
 				<div
-					class="flex min-h-screen flex-col items-start justify-center gap-4 p-10 text-left sticky top-0 self-start"
+					class="fixed lg:static bottom-0 left-0 right-0 z-50 bg-[color:var(--ink-900)] flex min-h-auto lg:min-h-screen flex-col items-start justify-center gap-3 md:gap-4 p-5 md:p-10 text-left lg:sticky lg:top-0 lg:self-start lg:order-2 border-t lg:border-t-0 border-[color:var(--ink-700)]"
 				>
-					<div class="text-9xl font-semibold whitespace-pre-line">
+					<div class="text-5xl md:text-7xl lg:text-9xl font-semibold whitespace-pre-line">
 						{nameStack}
 					</div>
-					<div class="flex gap-3 text-sm">
+					<div class="flex gap-2 md:gap-3 text-sm">
 						<a
-							class="flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--ink-500)] text-[color:var(--paper)] transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]"
+							class="flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-full border border-[color:var(--ink-500)] text-[color:var(--paper)] transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]"
 							href={me.Email}
 							aria-label="Email"
 						>
@@ -347,7 +351,7 @@ const nameStack = me.name.trim().replace(/\s+/g, "\n");
 							></iconify-icon>
 						</a>
 						<a
-							class="flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--ink-500)] text-[color:var(--paper)] transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]"
+							class="flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-full border border-[color:var(--ink-500)] text-[color:var(--paper)] transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]"
 							href={me.LinkedIn}
 							target="_blank"
 							rel="noreferrer"
@@ -359,7 +363,7 @@ const nameStack = me.name.trim().replace(/\s+/g, "\n");
 							></iconify-icon>
 						</a>
 						<a
-							class="flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--ink-500)] text-[color:var(--paper)] transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]"
+							class="flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-full border border-[color:var(--ink-500)] text-[color:var(--paper)] transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]"
 							href="https://github.com"
 							target="_blank"
 							rel="noreferrer"
