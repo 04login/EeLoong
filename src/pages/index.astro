@@ -43,37 +43,37 @@ const nameStack = me.name.trim().replace(/\s+/g, "\n");
 	>
 		<main class="min-h-screen">
 			<div class="grid min-h-screen grid-cols-[1fr_auto]">
-				<div class="flex flex-col justify-start gap-0 px-6 py-10">
+				<div class="flex flex-col justify-start gap-0 px-5 py-5">
 					<!-- Education section -->
 					<div
-						class="flex-1 flex flex-col gap-3 -mx-6 px-6 py-6 bg-[color:var(--ink-900)]"
+						class="flex-1 flex flex-col gap-10 py-8 bg-[color:var(--ink-900)]"
 					>
 					<!-- Wrap header in a flex for side by side -->
-					<div class="flex items-center gap-3">
+					<div class="flex items-center gap-5">
 						<iconify-icon
 							icon="material-symbols:school"
 							class="text-[color:var(--paper-dim)] text-xl"
 						></iconify-icon>
 						<p
-							class="text-xl font-semibold uppercase tracking-[0.28em] text-[color:var(--paper-dim)]"
+							class="text-xl font-semibold uppercase tracking-[0.24em] text-[color:var(--paper-dim)]"
 						>
 							My Educational Journey
 						</p>
 					</div>
-						<!-- Timeline container -->
-						<div class="relative mt-8">
-							<!-- Super long animated progress bar -->
+						
+						<!-- Timeline wrapper -->
+						<div class="relative px-8">
+							<!-- Progress bar -->
 							<div
-								class="absolute top-6 left-20 right-20 h-[2px] bg-gradient-to-r from-[color:var(--accent)] via-[color:var(--ink-500)] to-[color:var(--accent)] bg-[length:200%_100%]"
+								class="absolute top-1/2 left-0 right-0 h-[2px] bg-gradient-to-r from-[color:var(--accent)] via-[color:var(--ink-500)] to-[color:var(--accent)] bg-[length:200%_100%]"
 								style="animation: progression-flow 5s linear infinite;"
-							>
-							</div>
-
-							<!-- Cards positioned on the bar -->
-							<div class="relative flex justify-between px-8">
+							></div>
+							
+							<!-- Cards container -->
+							<div class="relative flex gap-25">
 								{education.map((edu) => (
 									<div
-										class="relative flex flex-col items-center gap-2 p-4 border border-[color:var(--ink-300)] rounded-xl bg-white/90 transition hover:border-[color:var(--accent)] hover:shadow-lg hover:shadow-[color:var(--accent)]/10"
+										class="relative flex flex-col items-center gap-2 p-4 border border-[color:var(--ink-300)] rounded-xl bg-white transition hover:border-[color:var(--accent)] hover:shadow-lg hover:shadow-[color:var(--accent)]/10"
 									>
 										<div
 											class={`w-full h-12 flex items-center ${edu.schools.length > 1 ? 'justify-between gap-7' : 'justify-center'}`}
@@ -330,9 +330,9 @@ const nameStack = me.name.trim().replace(/\s+/g, "\n");
 					</div>
 				</div>
 				<div
-					class="flex min-h-screen flex-col items-start justify-center gap-4 p-6 text-left sticky top-0 self-start"
+					class="flex min-h-screen flex-col items-start justify-center gap-4 p-10 text-left sticky top-0 self-start"
 				>
-					<div class="text-8xl font-semibold whitespace-pre-line">
+					<div class="text-9xl font-semibold whitespace-pre-line">
 						{nameStack}
 					</div>
 					<div class="flex gap-3 text-sm">
