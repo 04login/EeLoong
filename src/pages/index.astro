@@ -1,27 +1,6 @@
 ---
 import "../styles/global.css";
-import { me, education } from "../data/profile.ts";
-
-const projects = [
-	{
-		title: "Project One",
-		desc: "Brief one-liner about what this project does and who it helps.",
-		link: "#",
-		stack: ["Astro", "Tailwind", "TypeScript"],
-	},
-	{
-		title: "Project Two",
-		desc: "A concise description that highlights the impact or metric.",
-		link: "#",
-		stack: ["React", "Node", "PostgreSQL"],
-	},
-	{
-		title: "Project Three",
-		desc: "Explain the problem you solved and the approach you took.",
-		link: "#",
-		stack: ["Design System", "Accessibility"],
-	},
-];
+import { me, education, workExperience, projects, skills } from "../data/profile.ts";
 
 const nameStack = me.name.trim().replace(/\s+/g, "\n");
 ---
@@ -43,7 +22,7 @@ const nameStack = me.name.trim().replace(/\s+/g, "\n");
 	>
 		<main class="min-h-screen">
 			<div class="grid min-h-screen grid-cols-1 lg:grid-cols-[1fr_auto]">
-				<div class="flex flex-col justify-start gap-0 px-3 py-3 md:px-5 md:py-5 lg:order-1 pb-32 lg:pb-5">
+				<div class="flex flex-col justify-start gap-0 mx-3 my-3 md:mx-5 md:my-5 lg:order-1 mb-32 lg:mb-5">
 					<!-- Education section -->
 					<div
 						class="flex-1 flex flex-col gap-6 md:gap-10 py-4 md:py-8 bg-[color:var(--ink-900)]"
@@ -52,285 +31,259 @@ const nameStack = me.name.trim().replace(/\s+/g, "\n");
 					<div class="flex items-center gap-3 md:gap-5">
 						<iconify-icon
 							icon="material-symbols:school"
-							class="text-[color:var(--paper-dim)] text-xl"
+							class="text-[color:var(--paper-dim)] text-lg md:text-xl"
 						></iconify-icon>
 						<p
-							class="text-xl font-semibold uppercase tracking-[0.24em] text-[color:var(--paper-dim)]"
+							class="text-sm md:text-xl font-semibold uppercase tracking-[0.24em] text-[color:var(--paper-dim)]"
 						>
 							My Educational Journey
 						</p>
 					</div>
 						
-						<!-- Timeline wrapper -->
-							<div class="relative px-2 md:px-8">
-								<!-- Progress bar - horizontal on desktop, vertical on mobile -->
-								<!-- <div
-									class="absolute hidden md:block top-1/2 left-0 right-0 h-[2px] bg-gradient-to-r from-[color:var(--accent)] via-[color:var(--ink-500)] to-[color:var(--accent)] bg-[length:200%_100%]"
-									style="animation: progression-flow 5s linear infinite;"
-								></div>
-								<div
-									class="absolute md:hidden left-1/2 top-0 bottom-0 w-[2px] -translate-x-1/2 bg-gradient-to-b from-[color:var(--accent)] via-[color:var(--ink-500)] to-[color:var(--accent)] bg-[length:100%_200%]"
-									style="animation: progression-flow 5s linear infinite;"
-								></div> -->
-								
-								<!-- Cards container -->
-								<div class="relative flex flex-col md:flex-row gap-8 md:gap-25">
-								{education.map((edu) => (
-									<div
-										class="relative flex flex-col items-center gap-2 p-4 border border-[color:var(--ink-300)] rounded-xl bg-white transition hover:border-[color:var(--accent)] hover:shadow-lg hover:shadow-[color:var(--accent)]/10"
-									>
-										<div
-											class={`w-full h-12 flex items-center ${edu.schools.length > 1 ? 'justify-between gap-7' : 'justify-center'}`}
-										>
-											{edu.schools.map((school) => (
-												<img
-													src={school.logo}
-													alt={school.name}
-													class="h-full w-auto object-contain"
-												/>
+					<!-- Cards container -->
+					<div class="flex flex-col md:flex-row gap-6 md:gap-8">
+						{education.map((edu) => (
+							<div
+								class="relative flex flex-col gap-4 p-5 md:p-6 border border-[color:var(--ink-600)] rounded-xl bg-[color:var(--ink-800)] hover:border-[color:var(--accent)] hover:shadow-lg hover:shadow-[color:var(--accent)]/10 transition md:flex-1"
+							>
+								{/* Logos section */}
+								{edu.schools.length > 1 ? (
+									<div class="flex items-center justify-center gap-6">
+										{edu.schools.map((school, index) => (
+											<>
+												<div class="flex flex-col items-center gap-2">
+													<div class="w-20 h-20 flex items-center justify-center">
+														<img
+															src={school.logo}
+															alt={school.name}
+															class="max-w-full max-h-full object-contain"
+														/>
+													</div>
+													<p class="text-xs font-semibold text-[color:var(--paper)] text-center">{school.name}</p>
+												</div>
+												{index < edu.schools.length - 1 && (
+													<iconify-icon
+														icon="mdi:close"
+														class="text-[color:var(--accent)] text-2xl flex-shrink-0"
+													></iconify-icon>
+												)}
+											</>
+										))}
+									</div>
+								) : (
+									<div class="flex flex-col items-center gap-2">
+										<div class="w-20 h-20 flex items-center justify-center">
+											<img
+												src={edu.schools[0].logo}
+												alt={edu.schools[0].name}
+												class="max-w-full max-h-full object-contain"
+											/>
+										</div>
+										<p class="text-sm font-semibold text-[color:var(--paper)]">{edu.schools[0].name}</p>
+									</div>
+								)}
+
+								{/* Degree info */}
+								<div class="flex flex-col gap-2 text-center border-t border-[color:var(--ink-600)] pt-4">
+									<p class="text-sm text-[color:var(--paper-muted)] leading-relaxed">
+										{edu.degree}
+									</p>
+									<div class="flex items-center justify-center gap-2 text-xs text-[color:var(--paper-dim)]">
+										<iconify-icon icon="mdi:calendar-outline" class="text-[color:var(--accent)]"></iconify-icon>
+										<span>{edu.period}</span>
+									</div>
+									{edu.isCurrent && (
+										<span class="px-3 py-1 text-xs font-semibold rounded-full bg-[color:var(--accent)]/10 text-[color:var(--accent)] border border-[color:var(--accent)]/30 self-center mt-2">
+											Current
+										</span>
+									)}
+								</div>
+							</div>
+						))}
+					</div>
+					</div>
+
+					<!-- Work Experience section -->
+					<div class="flex flex-col gap-6 md:gap-10 py-4 md:py-8 bg-[color:var(--ink-850)] -mx-3 md:-mx-5 px-3 md:px-5">
+						<div class="flex items-center gap-3 md:gap-5">
+							<iconify-icon
+								icon="mdi:briefcase-outline"
+								class="text-[color:var(--paper-dim)] text-lg md:text-xl"
+							></iconify-icon>
+							<p class="text-sm md:text-xl font-semibold uppercase tracking-[0.24em] text-[color:var(--paper-dim)]">
+								Work Experience
+							</p>
+						</div>
+
+						<div class="flex flex-col gap-6">
+							{workExperience.map((work) => (
+								<div class="relative flex flex-col gap-4 p-5 md:p-6 border border-[color:var(--ink-600)] rounded-xl bg-[color:var(--ink-800)] hover:border-[color:var(--accent)] hover:shadow-lg hover:shadow-[color:var(--accent)]/10 transition">
+									<div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+										<div class="flex items-start gap-4">
+											{work.logo && (
+												<div class="flex-shrink-0 w-16 h-16 flex items-center justify-center">
+													<img
+														src={work.logo}
+														alt={work.company}
+														class="max-w-full max-h-full object-contain"
+													/>
+												</div>
+											)}
+											<div class="flex flex-col gap-1">
+												<h3 class="text-xl font-bold text-[color:var(--paper)]">{work.company}</h3>
+												<p class="text-sm font-semibold text-[color:var(--accent)]">{work.role}</p>
+												<span class="text-xs text-[color:var(--paper-dim)] flex items-center gap-1 mt-1">
+													<iconify-icon icon="mdi:calendar-outline" class="text-[color:var(--accent)]"></iconify-icon>
+													{work.period}
+												</span>
+											</div>
+										</div>
+										{work.current && (
+											<span class="px-3 py-1 text-xs font-semibold rounded-full bg-[color:var(--accent)]/10 text-[color:var(--accent)] border border-[color:var(--accent)]/30 self-start">
+												Current
+											</span>
+										)}
+									</div>
+									<ul class="flex flex-col gap-2 text-sm text-[color:var(--paper-muted)]">
+										{work.achievements.map((achievement) => (
+											<li class="flex gap-2">
+												<iconify-icon icon="mdi:chevron-right" class="text-[color:var(--accent)] mt-0.5 flex-shrink-0"></iconify-icon>
+												<span>{achievement}</span>
+											</li>
+										))}
+									</ul>
+									{work.technologies.length > 0 && (
+										<div class="flex flex-wrap gap-2 pt-2 border-t border-[color:var(--ink-600)]">
+											{work.technologies.map((tech) => (
+												<span class="px-3 py-1 text-xs rounded-md bg-[color:var(--ink-700)] text-[color:var(--accent)] border border-[color:var(--accent)]/20">
+													{tech}
+												</span>
 											))}
 										</div>
-										<div class="text-center text-[color:var(--ink-700)]">
-											{edu.schools.length > 1 ? (
-												<div class="flex items-center justify-center gap-1 flex-wrap">
-													{edu.schools.map((school, index) => (
-														<>
-															<a class="text-xs font-semibold">{school.name}</a>
-															{index < edu.schools.length - 1 && (
-																<iconify-icon
-																	icon="mdi:close"
-																	class="text-[color:var(--accent)] text-sm"
-																></iconify-icon>
-															)}
-														</>
-													))}
-												</div>
-											) : (
-												<p class="text-xs font-semibold">{edu.schools[0].name}</p>
-											)}
-											<p class="text-[10px] text-[color:var(--ink-500)] mt-1">
-												{edu.degree}
-											</p>
-											<div class="flex items-center justify-center gap-1 mt-2 text-[10px]">
-												<iconify-icon icon="mdi:calendar" class="text-[color:var(--accent)]"></iconify-icon>
-												<span class="text-[color:var(--ink-600)]">{edu.period}</span>
-											</div>
-											<p class="text-[10px] text-[color:var(--accent)] mt-1 font-semibold">
-												{edu.status}
-											</p>
-										</div>
-										<!-- Connection dot to timeline -->
-										<div
-											class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-[color:var(--accent)] border-2 border-[color:var(--ink-900)] shadow-sm shadow-[color:var(--accent)]/50"
-										></div>
-									</div>
-								))}
-							</div>
+									)}
+								</div>
+							))}
 						</div>
 					</div>
 
-					<!-- Work section -->
-					<div
-						class="flex-1 flex flex-col gap-1 -mx-6 px-6 py-6 bg-[color:var(--ink-850)]"
-					>
-						<p
-							class="text-xs font-semibold uppercase tracking-[0.28em] text-[color:var(--paper-dim)]"
-						>
-							What I've worked on
-						</p>
-						<ul
-							class="flex flex-col gap-1 text-[color:var(--paper-muted)]"
-						>
-							<li>Role or project 1</li>
-							<li>Role or project 2</li>
-							<li>Role or project 3</li>
-						</ul>
+					<!-- Projects section -->
+					<div class="flex flex-col gap-6 md:gap-10 py-4 md:py-8 bg-[color:var(--ink-800)] -mx-3 md:-mx-5 px-3 md:px-5">
+						<div class="flex items-center gap-3 md:gap-5">
+							<iconify-icon
+								icon="mdi:rocket-launch-outline"
+								class="text-[color:var(--paper-dim)] text-lg md:text-xl"
+							></iconify-icon>
+							<p class="text-sm md:text-xl font-semibold uppercase tracking-[0.24em] text-[color:var(--paper-dim)]">
+								Projects
+							</p>
+						</div>
+
+						<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+							{projects.map((project) => (
+								<div class="relative flex flex-col gap-3 p-4 md:p-5 border border-[color:var(--ink-600)] rounded-xl bg-[color:var(--ink-850)] hover:border-[color:var(--accent)] hover:shadow-lg hover:shadow-[color:var(--accent)]/10 transition group">
+									<div class="flex items-start justify-between gap-2">
+										<h3 class="text-lg font-bold text-[color:var(--paper)] group-hover:text-[color:var(--accent)] transition">{project.title}</h3>
+										{project.link && (
+											<a href={project.link} target="_blank" rel="noopener noreferrer" class="text-[color:var(--accent)] hover:text-[color:var(--paper)] transition">
+												<iconify-icon icon="mdi:open-in-new" class="text-xl"></iconify-icon>
+											</a>
+										)}
+									</div>
+									<p class="text-xs font-semibold text-[color:var(--accent)]">{project.role}</p>
+									<p class="text-xs text-[color:var(--paper-dim)] flex items-center gap-1">
+										<iconify-icon icon="mdi:calendar-outline"></iconify-icon>
+										{project.period}
+									</p>
+									<p class="text-sm text-[color:var(--paper-muted)] leading-relaxed">{project.description}</p>
+									<ul class="flex flex-col gap-1 text-xs text-[color:var(--paper-muted)]">
+										{project.achievements.slice(0, 2).map((achievement) => (
+											<li class="flex gap-1">
+												<iconify-icon icon="mdi:check" class="text-[color:var(--accent)] mt-0.5 flex-shrink-0"></iconify-icon>
+												<span>{achievement}</span>
+											</li>
+										))}
+									</ul>
+									<div class="flex flex-wrap gap-2 mt-auto pt-3">
+										{project.technologies.map((tech) => (
+											<span class="px-2 py-1 text-xs rounded-md bg-[color:var(--ink-700)] text-[color:var(--paper-dim)] border border-[color:var(--ink-600)]">
+												{tech}
+											</span>
+										))}
+									</div>
+								</div>
+							))}
+						</div>
 					</div>
-					<!-- Work section -->
-					<div
-						class="flex-1 flex flex-col gap-1 -mx-6 px-6 py-6 bg-[color:var(--ink-800)]"
-					>
-						<p
-							class="text-xs font-semibold uppercase tracking-[0.28em] text-[color:var(--paper-dim)]"
-						>
-							What I've worked on
-						</p>
-						<ul
-							class="flex flex-col gap-1 text-[color:var(--paper-muted)]"
-						>
-							<li>Role or project 1</li>
-							<li>Role or project 2</li>
-							<li>Role or project 3</li>
-						</ul>
-					</div>
-					<!-- Work section -->
-					<div
-						class="flex-1 flex flex-col gap-1 -mx-6 px-6 py-6 bg-[color:var(--ink-750)]"
-					>
-						<p
-							class="text-xs font-semibold uppercase tracking-[0.28em] text-[color:var(--paper-dim)]"
-						>
-							What I've worked on
-						</p>
-						<ul
-							class="flex flex-col gap-1 text-[color:var(--paper-muted)]"
-						>
-							<li>Role or project 1</li>
-							<li>Role or project 2</li>
-							<li>Role or project 3</li>
-						</ul>
-					</div>
-					<!-- Work section -->
-					<div
-						class="flex-1 flex flex-col gap-1 -mx-6 px-6 py-6 bg-[color:var(--ink-700)]"
-					>
-						<p
-							class="text-xs font-semibold uppercase tracking-[0.28em] text-[color:var(--paper-dim)]"
-						>
-							What I've worked on
-						</p>
-						<ul
-							class="flex flex-col gap-1 text-[color:var(--paper-muted)]"
-						>
-							<li>Role or project 1</li>
-							<li>Role or project 2</li>
-							<li>Role or project 3</li>
-						</ul>
-					</div>
-					<!-- Work section -->
-					<div
-						class="flex-1 flex flex-col gap-1 -mx-6 px-6 py-6 bg-[color:var(--ink-650)]"
-					>
-						<p
-							class="text-xs font-semibold uppercase tracking-[0.28em] text-[color:var(--paper-dim)]"
-						>
-							What I've worked on
-						</p>
-						<ul
-							class="flex flex-col gap-1 text-[color:var(--paper-muted)]"
-						>
-							<li>Role or project 1</li>
-							<li>Role or project 2</li>
-							<li>Role or project 3</li>
-						</ul>
-					</div>
-					<!-- Work section -->
-					<div
-						class="flex-1 flex flex-col gap-1 -mx-6 px-6 py-6 bg-[color:var(--ink-600)]"
-					>
-						<p
-							class="text-xs font-semibold uppercase tracking-[0.28em] text-[color:var(--paper-dim)]"
-						>
-							What I've worked on
-						</p>
-						<ul
-							class="flex flex-col gap-1 text-[color:var(--paper-muted)]"
-						>
-							<li>Role or project 1</li>
-							<li>Role or project 2</li>
-							<li>Role or project 3</li>
-						</ul>
-					</div>
-					<!-- Work section -->
-					<div
-						class="flex-1 flex flex-col gap-1 -mx-6 px-6 py-6 bg-[color:var(--ink-550)]"
-					>
-						<p
-							class="text-xs font-semibold uppercase tracking-[0.28em] text-[color:var(--paper-dim)]"
-						>
-							What I've worked on
-						</p>
-						<ul
-							class="flex flex-col gap-1 text-[color:var(--paper-muted)]"
-						>
-							<li>Role or project 1</li>
-							<li>Role or project 2</li>
-							<li>Role or project 3</li>
-						</ul>
-					</div>
-					<!-- Work section -->
-					<div
-						class="flex-1 flex flex-col gap-1 -mx-6 px-6 py-6 bg-[color:var(--ink-500)]"
-					>
-						<p
-							class="text-xs font-semibold uppercase tracking-[0.28em] text-[color:var(--paper-dim)]"
-						>
-							What I've worked on
-						</p>
-						<ul
-							class="flex flex-col gap-1 text-[color:var(--paper-muted)]"
-						>
-							<li>Role or project 1</li>
-							<li>Role or project 2</li>
-							<li>Role or project 3</li>
-						</ul>
-					</div>
-					<!-- Work section -->
-					<div
-						class="flex-1 flex flex-col gap-1 -mx-6 px-6 py-6 bg-[color:var(--ink-800)]"
-					>
-						<p
-							class="text-xs font-semibold uppercase tracking-[0.28em] text-[color:var(--paper-dim)]"
-						>
-							What I've worked on
-						</p>
-						<ul
-							class="flex flex-col gap-1 text-[color:var(--paper-muted)]"
-						>
-							<li>Role or project 1</li>
-							<li>Role or project 2</li>
-							<li>Role or project 3</li>
-						</ul>
-					</div>
-					<!-- Work section -->
-					<div
-						class="flex-1 flex flex-col gap-1 -mx-6 px-6 py-6 bg-[color:var(--ink-800)]"
-					>
-						<p
-							class="text-xs font-semibold uppercase tracking-[0.28em] text-[color:var(--paper-dim)]"
-						>
-							What I've worked on
-						</p>
-						<ul
-							class="flex flex-col gap-1 text-[color:var(--paper-muted)]"
-						>
-							<li>Role or project 1</li>
-							<li>Role or project 2</li>
-							<li>Role or project 3</li>
-						</ul>
-					</div>
-					<!-- Work section -->
-					<div
-						class="flex-1 flex flex-col gap-1 -mx-6 px-6 py-6 bg-[color:var(--ink-800)]"
-					>
-						<p
-							class="text-xs font-semibold uppercase tracking-[0.28em] text-[color:var(--paper-dim)]"
-						>
-							What I've worked on
-						</p>
-						<ul
-							class="flex flex-col gap-1 text-[color:var(--paper-muted)]"
-						>
-							<li>Role or project 1</li>
-							<li>Role or project 2</li>
-							<li>Role or project 3</li>
-						</ul>
-					</div>
-					<!-- Experience section -->
-					<div
-						class="flex-1 flex flex-col gap-1 -mx-6 px-6 py-6 bg-[color:var(--ink-700)]"
-					>
-						<p
-							class="text-xs font-semibold uppercase tracking-[0.28em] text-[color:var(--paper-dim)]"
-						>
-							Experience
-						</p>
-						<ul
-							class="flex flex-col gap-1 text-[color:var(--paper-muted)]"
-						>
-							<li>Years of experience: (fill in)</li>
-							<li>Focus areas: (fill in)</li>
-						</ul>
+
+					<!-- Skills section -->
+					<div class="flex flex-col gap-6 md:gap-10 py-4 md:py-8 bg-[color:var(--ink-750)] -mx-3 md:-mx-5 px-3 md:px-5">
+						<div class="flex items-center gap-3 md:gap-5">
+							<iconify-icon
+								icon="mdi:code-braces"
+								class="text-[color:var(--paper-dim)] text-lg md:text-xl"
+							></iconify-icon>
+							<p class="text-sm md:text-xl font-semibold uppercase tracking-[0.24em] text-[color:var(--paper-dim)]">
+								Skills & Technologies
+							</p>
+						</div>
+
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+							<div class="flex flex-col gap-3">
+								<h3 class="text-base font-bold text-[color:var(--accent)] flex items-center gap-2">
+									<iconify-icon icon="mdi:code-tags"></iconify-icon>
+									Programming Languages
+								</h3>
+								<div class="flex flex-wrap gap-2">
+									{skills.languages.map((lang) => (
+										<span class="px-3 py-1.5 text-sm rounded-lg bg-[color:var(--ink-800)] text-[color:var(--paper)] border border-[color:var(--ink-600)] hover:border-[color:var(--accent)] hover:text-[color:var(--accent)] transition">
+											{lang}
+										</span>
+									))}
+								</div>
+							</div>
+
+							<div class="flex flex-col gap-3">
+								<h3 class="text-base font-bold text-[color:var(--accent)] flex items-center gap-2">
+									<iconify-icon icon="mdi:tools"></iconify-icon>
+									Tools & Libraries
+								</h3>
+								<div class="flex flex-wrap gap-2">
+									{skills.tools.map((tool) => (
+										<span class="px-3 py-1.5 text-sm rounded-lg bg-[color:var(--ink-800)] text-[color:var(--paper)] border border-[color:var(--ink-600)] hover:border-[color:var(--accent)] hover:text-[color:var(--accent)] transition">
+											{tool}
+										</span>
+									))}
+								</div>
+							</div>
+
+							<div class="flex flex-col gap-3">
+								<h3 class="text-base font-bold text-[color:var(--accent)] flex items-center gap-2">
+									<iconify-icon icon="mdi:school-outline"></iconify-icon>
+									CS Fundamentals
+								</h3>
+								<div class="flex flex-wrap gap-2">
+									{skills.fundamentals.map((fund) => (
+										<span class="px-3 py-1.5 text-sm rounded-lg bg-[color:var(--ink-800)] text-[color:var(--paper)] border border-[color:var(--ink-600)] hover:border-[color:var(--accent)] hover:text-[color:var(--accent)] transition">
+											{fund}
+										</span>
+									))}
+								</div>
+							</div>
+
+							<div class="flex flex-col gap-3">
+								<h3 class="text-base font-bold text-[color:var(--accent)] flex items-center gap-2">
+									<iconify-icon icon="mdi:account-group-outline"></iconify-icon>
+									Soft Skills
+								</h3>
+								<div class="flex flex-wrap gap-2">
+									{skills.soft.map((soft) => (
+										<span class="px-3 py-1.5 text-sm rounded-lg bg-[color:var(--ink-800)] text-[color:var(--paper)] border border-[color:var(--ink-600)] hover:border-[color:var(--accent)] hover:text-[color:var(--accent)] transition">
+											{soft}
+										</span>
+									))}
+								</div>
+							</div>
+						</div>
 					</div>
 				</div>
 				<div
