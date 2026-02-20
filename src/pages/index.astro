@@ -52,13 +52,15 @@ const nameStack = me.name.trim().replace(/\s+/g, "\n");
 										{edu.schools.map((school, index) => (
 											<>
 												<div class="flex flex-col items-center gap-2">
-													<div class="w-20 h-20 flex items-center justify-center">
-														<img
-															src={school.logo}
-															alt={school.name}
-															class="max-w-full max-h-full object-contain"
-														/>
-													</div>
+<div class="w-20 h-20 flex items-center justify-center 
+            bg-[color:var(--paper)] 
+            rounded-lg p-2">
+  <img
+    src={school.logo}
+    alt={school.name}
+    class="max-w-full max-h-full object-contain"
+  />
+</div>
 													<p class="text-xs font-semibold text-[color:var(--paper)] text-center">{school.name}</p>
 												</div>
 												{index < edu.schools.length - 1 && (
