@@ -46,7 +46,7 @@ export const workExperience = [
 		id: 1,
 		company: 'Seagate Technology',
 		logo: '/images/seagate.jpg',
-		role: 'Product Test Intern / Assistant Engineer',
+		role: 'Software Development Intern',
 		period: 'May 2025 - Apr 2026',
 		location: 'Singapore',
 		current: true,
