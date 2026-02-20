@@ -52,7 +52,7 @@ const nameStack = me.name.trim().replace(/\s+/g, "\n");
 										{edu.schools.map((school, index) => (
 											<>
 												<div class="flex flex-col items-center gap-2">
-<div class="w-20 h-20 flex items-center justify-center 
+<div class="w-28 h-28 flex items-center justify-center 
             bg-[color:var(--paper)] 
             rounded-lg p-2">
   <img
@@ -74,13 +74,15 @@ const nameStack = me.name.trim().replace(/\s+/g, "\n");
 									</div>
 								) : (
 									<div class="flex flex-col items-center gap-2">
-										<div class="w-20 h-20 flex items-center justify-center">
-											<img
-												src={edu.schools[0].logo}
-												alt={edu.schools[0].name}
-												class="max-w-full max-h-full object-contain"
-											/>
-										</div>
+<div class="w-28 h-28 flex items-center justify-center 
+            bg-[color:var(--paper)] 
+            rounded-lg p-2">
+  <img
+    src={school.logo}
+    alt={school.name}
+    class="max-w-full max-h-full object-contain"
+  />
+</div>
 										<p class="text-sm font-semibold text-[color:var(--paper)]">{edu.schools[0].name}</p>
 									</div>
 								)}
