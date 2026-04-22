@@ -8,18 +8,32 @@ export const me = {
 	Email: 'mailto:eeloonglow@gmail.com'
 };
 
+export type Project = {
+	id: number;
+	title: string;
+	role: string;
+	period: string;
+	institution: string;
+	description: string;
+	achievements: string[];
+	technologies: string[];
+	link: string | null;
+	featured: boolean;
+};
+
 export const education = [
 	{
 		id: 1,
 		schools: [
 			{
-				name: 'DigiPen Institute of Technology',
-				logo: '/images/DigiPen_RGB_Red.png'
-			},
-			{
 				name: 'Singapore Institute of Technology',
 				logo: '/images/SITlogo.svg'
+			},
+			{
+				name: 'DigiPen Institute of Technology',
+				logo: '/images/DigiPen_RGB_Red.png'
 			}
+
 		],
 		degree: 'Bachelor of Science in Computer Science in Real-Time Interactive Simulation',
 		period: 'Oct 2022 - Apr 2026',
@@ -74,7 +88,7 @@ export const workExperience = [
 	}
 ];
 
-export const projects = [
+export const projects: Project[] = [
 	{
 		id: 1,
 		title: 'Exodus II',
@@ -122,6 +136,41 @@ export const projects = [
 		technologies: ['C'],
 		link: null,
 		featured: false
+	},
+	{
+		id: 4,
+		title: 'Personal Portfolio Website',
+		role: 'Developer',
+		period: 'Mar 2024 - Apr 2024',
+		institution: 'Personal Project',
+		description: 'Designed and developed this personal portfolio website to showcase my projects and experience',
+		achievements: [
+			'Built with Astro and Tailwind CSS, ensuring a responsive and visually appealing design',
+			'Implemented a custom dark mode toggle, enhancing user experience and accessibility',
+			'Optimized for performance and SEO, resulting in a 20% increase in page load speed'
+		],
+		technologies: ['Astro', 'Tailwind CSS', 'JavaScript'],
+		link: 'https://eeloonglow.com',
+		featured: false
+	},
+	{
+		id: 5,
+		title: 'CarousellScraper',
+		role: 'Creator',
+		period: 'March 2026 - Present',
+		institution: 'Personal Project',
+		description: 'Built an end-to-end market monitoring platform for Carousell Singapore PC listings, combining automated data collection, LLM-assisted valuation, and a Cloudflare-hosted dashboard for actionable deal insights.',
+		achievements: [
+			'Designed a browserless data collection pipeline in Python with configurable query, sorting, and pricing filters to support targeted market tracking',
+			'Implemented robust session handling, request retries, and token refresh workflows to improve reliability for scheduled unattended runs',
+			'Built deduplication and price-drop re-evaluation logic so previously seen listings are skipped unless price changes materially affect deal score',
+			'Designed batched LiteLLM orchestration across Gemini, Groq, and Qwen with graceful fallback and automated recovery from rate-limit or transient provider failures',
+			'Computed intrinsic value and deal score from extracted components, then persisted normalized listing plus analysis data into Cloudflare D1',
+			'Integrated local Windows Task Scheduler automation with a Cloudflare Pages dashboard (Astro) for continuous monitoring and admin search management'
+		],
+		technologies: ['Python', 'curl_cffi', 'LiteLLM', 'Cloudflare D1', 'Cloudflare Pages', 'Astro', 'Tailwind CSS', 'Windows Task Scheduler'],
+		link: '/projects/carousellbot',
+		featured: true
 	}
 ];
 
