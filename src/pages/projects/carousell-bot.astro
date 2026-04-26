@@ -14,6 +14,7 @@ const url = new URL(Astro.request.url);
 const filterSearchId = url.searchParams.get("search_id") || "all";
 const textQuery = url.searchParams.get("q") || "";
 const sortOption = url.searchParams.get("sort") || "score_desc";
+const timeOption = url.searchParams.get("time") || "all";
 
 if (db) {
     // 1. Fetch available searches for the dropdown filter
@@ -35,6 +36,19 @@ if (db) {
         whereClauses.push("(l.title LIKE ? OR l.description LIKE ?)");
         queryArgs.push(`%${textQuery}%`);
         queryArgs.push(`%${textQuery}%`);
+    }
+
+    // Add time filter logic
+    if (timeOption !== "all") {
+        if (timeOption === "1d") {
+            whereClauses.push("l.listed_at >= datetime('now', '-1 day')");
+        } else if (timeOption === "3d") {
+            whereClauses.push("l.listed_at >= datetime('now', '-3 days')");
+        } else if (timeOption === "7d") {
+            whereClauses.push("l.listed_at >= datetime('now', '-7 days')");
+        } else if (timeOption === "1m") {
+            whereClauses.push("l.listed_at >= datetime('now', '-1 month')");
+        }
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : "";
@@ -130,7 +144,7 @@ const formatDate = (dateStr: string) => {
         </style>
 	</head>
 	<body class="min-h-screen bg-[color:var(--ink-900)] text-[color:var(--paper)]">
-		<main class="max-w-6xl mx-auto p-4 md:p-8">
+		<main class="w-full max-w-[96%] xl:max-w-[90%] mx-auto pb-12 pt-4 md:pt-8 md:px-8">
 			<!-- Header -->
             <div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
 				<div>
@@ -170,6 +184,17 @@ const formatDate = (dateStr: string) => {
                     </div>
 
                     <div class="w-full md:w-auto min-w-[170px]">
+                        <label for="time" class="block text-[color:var(--paper-dim)] text-xs font-semibold uppercase tracking-wider mb-1.5 ml-0.5">Time Range</label>
+                        <select id="time" name="time" class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 text-sm text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)] transition appearance-none cursor-pointer">
+                            <option value="all" selected={timeOption === "all"}>All Time</option>
+                            <option value="1d" selected={timeOption === "1d"}>Past 24 Hours</option>
+                            <option value="3d" selected={timeOption === "3d"}>Past 3 Days</option>
+                            <option value="7d" selected={timeOption === "7d"}>Past Week</option>
+                            <option value="1m" selected={timeOption === "1m"}>Past Month</option>
+                        </select>
+                    </div>
+
+                    <div class="w-full md:w-auto min-w-[170px]">
                         <label for="sort" class="block text-[color:var(--paper-dim)] text-xs font-semibold uppercase tracking-wider mb-1.5 ml-0.5">Sort By</label>
                         <select id="sort" name="sort" class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 text-sm text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)] transition appearance-none cursor-pointer">
                             <option value="score_desc" selected={sortOption === "score_desc"}>Highest Deal Score</option>
@@ -201,7 +226,7 @@ const formatDate = (dateStr: string) => {
                         <p class="text-[color:var(--paper-muted)] mt-2 text-sm">Try adjusting your filters or checking back later after the bot runs.</p>
                     </div>
 				) : (
-					<div class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+					<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 items-start">
 						{deals.map((deal) => (
 							<div class="relative flex flex-col border border-[color:var(--ink-600)] rounded-xl bg-[color:var(--ink-900)] overflow-hidden shadow-sm hover:border-[color:var(--accent)]/50 hover:shadow-[color:var(--accent)]/5 transition-all duration-300">
 								
