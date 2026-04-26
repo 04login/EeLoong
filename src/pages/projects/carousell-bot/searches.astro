@@ -1,0 +1,242 @@
+---
+import "../../../styles/global.css";
+
+// Ensure this is SSR
+export const prerender = false;
+
+// We need DB access
+let db = Astro.locals?.runtime?.env?.DB;
+
+let successMessage = "";
+let errorMessage = "";
+
+if (Astro.request.method === "POST" && db) {
+  try {
+    const data = await Astro.request.formData();
+    const action = data.get("action");
+
+    if (action === "create") {
+      const name = data.get("name")?.toString();
+      const query = data.get("query")?.toString();
+      const min_price = data.get("min_price") ? Number(data.get("min_price")) : 1;
+      const max_price = data.get("max_price") ? Number(data.get("max_price")) : null;
+      const exclude_bumped = data.get("exclude_bumped") === "on";
+
+      if (!name || !query) {
+        throw new Error("Name and Query are required.");
+      }
+
+      await db.prepare(
+        `INSERT INTO monitored_searches (name, query, min_price, max_price, exclude_bumped) VALUES (?, ?, ?, ?, ?)`
+      ).bind(name, query, min_price, max_price, exclude_bumped ? 1 : 0).run();
+      
+      successMessage = "Search added successfully.";
+    } else if (action === "toggle") {
+      const search_id = data.get("search_id");
+      if (search_id) {
+        await db.prepare(
+          `UPDATE monitored_searches SET is_active = NOT is_active WHERE search_id = ?`
+        ).bind(search_id).run();
+        successMessage = "Search status toggled.";
+      }
+    } else if (action === "delete") {
+      const search_id = data.get("search_id");
+      if (search_id) {
+        await db.prepare(
+          `DELETE FROM monitored_searches WHERE search_id = ?`
+        ).bind(search_id).run();
+        successMessage = "Search deleted successfully.";
+      }
+    }
+  } catch (error: any) {
+    console.error("Form error:", error);
+    errorMessage = error.message || "An error occurred while processing the request.";
+  }
+}
+
+let searches = [];
+if (db) {
+  const result = await db.prepare(
+    `SELECT search_id, name, query, min_price, max_price, is_active, exclude_bumped FROM monitored_searches ORDER BY created_at DESC`
+  ).all();
+  if (result.results) {
+    searches = result.results;
+  }
+}
+
+if (!db && import.meta.env.DEV) {
+  searches = [
+    { search_id: 1, name: "RTX 3080", query: "rtx 3080", min_price: 300, max_price: 600, is_active: 1, exclude_bumped: 1 },
+    { search_id: 2, name: "Ryzen 5 5600", query: "ryzen 5600", min_price: 50, max_price: 150, is_active: 0, exclude_bumped: 0 },
+  ];
+}
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width" />
+		<title>Manage Searches - Carousell Deal Monitor</title>
+		<script type="module" src="https://cdn.jsdelivr.net/npm/iconify-icon@1/dist/iconify-icon.min.js"></script>
+	</head>
+	<body class="min-h-screen bg-[color:var(--ink-900)] text-[color:var(--paper)]">
+		<main class="max-w-6xl mx-auto p-4 md:p-8">
+			<div class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[color:var(--ink-600)] pb-4">
+				<div>
+					<div class="flex items-center gap-2 mb-2">
+                        <a href="/projects/carousell-bot" class="text-[color:var(--accent)] hover:text-[color:var(--paper)] flex items-center">
+                            <iconify-icon icon="mdi:arrow-left" class="mr-1"></iconify-icon>
+                            Back to Deals
+                        </a>
+                    </div>
+					<h1 class="text-3xl font-bold text-[color:var(--paper)]">Manage Searches</h1>
+					<p class="text-[color:var(--paper-dim)]">Configure scraper parameters mapped directly to D1 Database</p>
+				</div>
+			</div>
+
+            {successMessage && (
+                <div class="mb-6 p-4 rounded-lg bg-green-900/50 border border-green-500 text-green-300">
+                    <p class="flex items-center gap-2 font-semibold">
+                        <iconify-icon icon="mdi:check-circle"></iconify-icon>
+                        {successMessage}
+                    </p>
+                </div>
+            )}
+
+            {errorMessage && (
+                <div class="mb-6 p-4 rounded-lg bg-red-900/50 border border-red-500 text-red-300">
+                    <p class="flex items-center gap-2 font-semibold">
+                        <iconify-icon icon="mdi:alert-circle"></iconify-icon>
+                        {errorMessage}
+                    </p>
+                </div>
+            )}
+			
+			<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+			    <div class="lg:col-span-1">
+                    <div class="bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-5 sticky top-8">
+                        <h2 class="text-xl font-bold mb-4 flex items-center gap-2 text-[color:var(--paper)]">
+                            <iconify-icon icon="mdi:plus-circle-outline"></iconify-icon>
+                            Add New Search
+                        </h2>
+                        
+                        <form method="POST" class="space-y-4">
+                            <input type="hidden" name="action" value="create" />
+                            
+                            <div>
+                                <label for="name" class="block text-[color:var(--paper-dim)] text-sm mb-1">Friendly Name</label>
+                                <input type="text" id="name" name="name" required class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)]" placeholder="e.g., Cheap 3080s">
+                            </div>
+                            
+                            <div>
+                                <label for="query" class="block text-[color:var(--paper-dim)] text-sm mb-1">Search Query</label>
+                                <input type="text" id="query" name="query" required class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)]" placeholder="e.g., rtx 3080">
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label for="min_price" class="block text-[color:var(--paper-dim)] text-sm mb-1">Min Price (S$)</label>
+                                    <input type="number" id="min_price" name="min_price" step="0.01" min="0" value="1.00" class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)]">
+                                </div>
+                                <div>
+                                    <label for="max_price" class="block text-[color:var(--paper-dim)] text-sm mb-1">Max Price (S$)</label>
+                                    <input type="number" id="max_price" name="max_price" step="0.01" min="0" class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)]" placeholder="Optional">
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center gap-2 mt-4 pt-4 border-t border-[color:var(--ink-700)]">
+                                <input type="checkbox" id="exclude_bumped" name="exclude_bumped" checked class="accent-[color:var(--accent)] h-4 w-4 rounded bg-[color:var(--ink-900)] border-[color:var(--ink-700)]">
+                                <label for="exclude_bumped" class="text-[color:var(--paper-dim)] text-sm cursor-pointer select-none">
+                                    Exclude Bumped Listings
+                                </label>
+                            </div>
+                            
+                            <button type="submit" class="w-full mt-4 bg-[color:var(--accent)] hover:bg-[color:var(--accent-light)] text-gray-900 font-bold py-2 px-4 rounded-md transition duration-200 flex justify-center items-center gap-2">
+                                <iconify-icon icon="mdi:content-save"></iconify-icon>
+                                Save Search
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                
+                <div class="lg:col-span-2">
+                    <div class="bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-[color:var(--ink-900)] border-b border-[color:var(--ink-600)] text-[color:var(--paper-dim)] text-sm">
+                                        <th class="p-4 font-semibold">Search Detail</th>
+                                        <th class="p-4 font-semibold text-center mt-0">Price Range</th>
+                                        <th class="p-4 font-semibold text-center">Status</th>
+                                        <th class="p-4 font-semibold text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {searches.length === 0 ? (
+                                        <tr>
+                                            <td colspan="4" class="p-8 text-center text-[color:var(--paper-dim)]">No monitored searches found. Create one to get started!</td>
+                                        </tr>
+                                    ) : (
+                                        searches.map((search) => (
+                                            <tr class="border-b border-[color:var(--ink-700)] hover:bg-[color:var(--ink-800)]/50 transition">
+                                                <td class="p-4">
+                                                    <div class="font-bold text-[color:var(--paper)] text-base mb-1">{search.name}</div>
+                                                    <div class="text-xs flex items-center gap-2 text-[color:var(--paper-muted)] mt-1">
+                                                        <span class="bg-[color:var(--ink-900)] border border-[color:var(--ink-600)] px-2 py-0.5 rounded flex items-center font-mono">
+                                                            <iconify-icon icon="mdi:magnify" class="mr-1"></iconify-icon>
+                                                            "{search.query}"
+                                                        </span>
+                                                        {search.exclude_bumped === 1 && (
+                                                            <span class="bg-blue-900/30 text-blue-400 px-2 py-0.5 rounded border border-blue-900/50 flex items-center" title="Excluding Bumped Listings">
+                                                                <iconify-icon icon="mdi:filter-outline" class="mr-1"></iconify-icon>
+                                                                No Bumps
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                
+                                                <td class="p-4 text-center mt-0 align-middle">
+                                                    <div class="inline-flex flex-col items-center bg-[color:var(--ink-900)] rounded-md border border-[color:var(--ink-700)] px-3 py-1">
+                                                        <span class="text-xs text-[color:var(--paper-dim)] font-semibold uppercase tracking-wider mb-0.5">Range</span>
+                                                        <span class="text-sm font-mono whitespace-nowrap text-[color:var(--paper)] flex items-center gap-1.5">
+                                                            S${search.min_price?.toFixed(2) || "0.00"}
+                                                            <iconify-icon icon="mdi:arrow-right-thin" class="text-[color:var(--paper-muted)]"></iconify-icon>
+                                                            {search.max_price ? `S$${search.max_price.toFixed(2)}` : "Max"}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                
+                                                <td class="p-4 text-center">
+                                                    <form method="POST" class="inline">
+                                                        <input type="hidden" name="action" value="toggle" />
+                                                        <input type="hidden" name="search_id" value={search.search_id} />
+                                                        <button 
+                                                            type="submit" 
+                                                            class={`px-3 py-1 rounded-full text-xs font-bold border transition ${search.is_active ? 'bg-green-900/20 text-green-400 border-green-800 hover:bg-green-900/40 hover:border-green-600' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700'}`}
+                                                        >
+                                                            {search.is_active ? 'Active' : 'Paused'}
+                                                        </button>
+                                                    </form>
+                                                </td>
+                                                <td class="p-4 text-right">
+                                                    <form method="POST" class="inline" onsubmit="return confirm('Are you sure you want to delete this search?');">
+                                                        <input type="hidden" name="action" value="delete" />
+                                                        <input type="hidden" name="search_id" value={search.search_id} />
+                                                        <button type="submit" class="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-md transition duration-200" title="Delete Search">
+                                                            <iconify-icon icon="mdi:delete-outline" class="text-xl"></iconify-icon>
+                                                        </button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+			</div>
+		</main>
+	</body>
+</html>

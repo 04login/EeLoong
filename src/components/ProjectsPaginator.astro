@@ -21,28 +21,28 @@ const { projects } = Astro.props;
 		>
 			<!-- JS will fill this -->
 		</div>
-	</div>
 
-	<div class="flex items-center justify-between pt-2 gap-4">
 		<button
 			id="prev-btn"
-			class="flex items-center gap-2 px-6 py-3 rounded-2xl border border-[color:var(--ink-600)] hover:border-[color:var(--accent)] text-[color:var(--paper)] transition disabled:opacity-30 disabled:cursor-not-allowed"
+			aria-label="Previous projects page"
+			class="absolute left-3 top-1/2 -translate-y-1/2 z-10 h-11 w-11 md:h-12 md:w-12 rounded-full border border-[color:var(--accent)] bg-[color:var(--accent)] text-[color:var(--paper)] hover:bg-[color:var(--accent-light)] hover:border-[color:var(--accent-light)] transition disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
 		>
 			<iconify-icon icon="mdi:chevron-left" class="text-2xl"></iconify-icon>
-			Previous
 		</button>
-
-		<div id="page-info" class="font-medium text-sm text-[color:var(--paper-dim)] text-center">
-			1 of 1
-		</div>
 
 		<button
 			id="next-btn"
-			class="flex items-center gap-2 px-6 py-3 rounded-2xl border border-[color:var(--ink-600)] hover:border-[color:var(--accent)] text-[color:var(--paper)] transition disabled:opacity-30 disabled:cursor-not-allowed"
+			aria-label="Next projects page"
+			class="absolute right-3 top-1/2 -translate-y-1/2 z-10 h-11 w-11 md:h-12 md:w-12 rounded-full border border-[color:var(--accent)] bg-[color:var(--accent)] text-[color:var(--paper)] hover:bg-[color:var(--accent-light)] hover:border-[color:var(--accent-light)] transition disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
 		>
-			Next
 			<iconify-icon icon="mdi:chevron-right" class="text-2xl"></iconify-icon>
 		</button>
+	</div>
+
+	<div class="flex items-center justify-center pt-2 gap-4">
+		<div id="page-info" class="flex items-center justify-center gap-2" aria-label="Project pages">
+			<span class="h-2 w-2 rounded-full bg-[color:var(--accent)]"></span>
+		</div>
 	</div>
 </div>
 
@@ -63,8 +63,23 @@ const { projects } = Astro.props;
 	}>;
 	let currentPage = 0;
 	let isAnimating = false;
+	let touchStartX = 0;
+	let touchStartY = 0;
+	let touchStartTime = 0;
 
 	const getItemsPerPage = (): number => (window.innerWidth >= 1024 ? 3 : 2);
+	const transitionMs = 320;
+	const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+	const renderPageDots = (totalPages: number): void => {
+		pageInfo.innerHTML = Array.from({ length: totalPages }, (_, pageIndex) => {
+			const dotClasses = pageIndex === currentPage
+				? 'bg-[color:var(--accent)] scale-110'
+				: 'bg-[color:var(--ink-600)]';
+
+			return `<span class="h-2 w-2 rounded-full transition ${dotClasses}" aria-hidden="true"></span>`;
+		}).join('');
+	};
 
 	const renderCard = (project: (typeof projects)[number]): string => `
 		<div class="relative flex flex-col gap-3 p-4 md:p-5 border border-[color:var(--ink-600)] rounded-xl bg-[color:var(--ink-850)] hover:border-[color:var(--accent)] hover:shadow-lg hover:shadow-[color:var(--accent)]/10 transition group h-full">
@@ -104,31 +119,41 @@ const { projects } = Astro.props;
 		const start = currentPage * itemsPerPage;
 		const pageProjects = projects.slice(start, start + itemsPerPage);
 
-		const slideOut = direction > 0 ? '-translate-x-8' : 'translate-x-8';
-		grid.style.transitionDuration = '400ms';
+		const outX = direction > 0 ? -30 : 30;
+		const inX = direction > 0 ? 30 : -30;
+
+		if (prefersReducedMotion) {
+			grid.innerHTML = pageProjects.map(renderCard).join('');
+			renderPageDots(totalPages);
+			prevBtn.disabled = currentPage === 0;
+			nextBtn.disabled = currentPage >= totalPages - 1;
+			isAnimating = false;
+			return;
+		}
+
+		grid.style.transitionDuration = `${transitionMs}ms`;
 		grid.style.opacity = '0';
-		grid.style.transform = slideOut;
+		grid.style.transform = `translateX(${outX}px) scale(0.985)`;
 
 		window.setTimeout(() => {
 			grid.innerHTML = pageProjects.map(renderCard).join('');
 
-			const slideIn = direction > 0 ? 'translate-x-8' : '-translate-x-8';
 			grid.style.transitionDuration = '0ms';
 			grid.style.opacity = '0';
-			grid.style.transform = slideIn;
+			grid.style.transform = `translateX(${inX}px) scale(0.985)`;
 
 			grid.offsetHeight;
 
-			grid.style.transitionDuration = '400ms';
+			grid.style.transitionDuration = `${transitionMs}ms`;
 			grid.style.opacity = '1';
-			grid.style.transform = 'translateX(0)';
+			grid.style.transform = 'translateX(0) scale(1)';
 
-			pageInfo.textContent = `${currentPage + 1} of ${totalPages}`;
+			renderPageDots(totalPages);
 			prevBtn.disabled = currentPage === 0;
 			nextBtn.disabled = currentPage >= totalPages - 1;
 
 			isAnimating = false;
-		}, 400);
+		}, transitionMs);
 	}
 
 	prevBtn.addEventListener('click', () => {
@@ -145,6 +170,36 @@ const { projects } = Astro.props;
 			renderPage(1);
 		}
 	});
+
+	grid.addEventListener('touchstart', (event) => {
+		const touch = event.changedTouches[0];
+		touchStartX = touch.clientX;
+		touchStartY = touch.clientY;
+		touchStartTime = Date.now();
+	}, { passive: true });
+
+	grid.addEventListener('touchend', (event) => {
+		if (isAnimating) return;
+
+		const touch = event.changedTouches[0];
+		const deltaX = touch.clientX - touchStartX;
+		const deltaY = touch.clientY - touchStartY;
+		const elapsedMs = Date.now() - touchStartTime;
+		const totalPages = Math.max(1, Math.ceil(projects.length / getItemsPerPage()));
+
+		const isHorizontalSwipe = Math.abs(deltaX) > 50 && Math.abs(deltaY) < 40 && elapsedMs < 650;
+		if (!isHorizontalSwipe) return;
+
+		if (deltaX < 0 && currentPage < totalPages - 1) {
+			currentPage++;
+			renderPage(1);
+		}
+
+		if (deltaX > 0 && currentPage > 0) {
+			currentPage--;
+			renderPage(-1);
+		}
+	}, { passive: true });
 
 	let resizeTimer: ReturnType<typeof window.setTimeout> | undefined;
 	window.addEventListener('resize', () => {

@@ -1,0 +1,130 @@
+---
+import "../../styles/global.css";
+
+// Ensure this is SSR
+export const prerender = false;
+
+// We need DB access
+let db = Astro.locals?.runtime?.env?.DB;
+
+let deals = [];
+
+if (db) {
+	// Query: Join listings (l) and listing_analysis (a)
+	// filter deal_score > 0 and l.is_active = TRUE
+	// order by deal_score DESC
+	const query = `
+		SELECT 
+			l.listing_id,
+			l.title,
+			l.price_sgd,
+			l.description,
+			l.url,
+			a.total_intrinsic_value,
+			a.deal_score,
+			a.llm_reasoning
+		FROM listings l
+		JOIN listing_analysis a ON l.listing_id = a.listing_id
+		WHERE a.deal_score > 0 AND l.is_active = TRUE
+		ORDER BY a.deal_score DESC
+	`;
+	const result = await db.prepare(query).all();
+	if (result.results) {
+		deals = result.results;
+	}
+}
+
+// In case DB isn't bound or doesn't have deals, mock data to be safe during dev
+if (!db && import.meta.env.DEV) {
+	console.warn("D1 Database 'DB' is not bound. Using mock data for local development.");
+	deals = [
+		{
+			listing_id: "mock1",
+			title: "Mock Deal: Asus RTX 3080",
+			price_sgd: 350,
+			total_intrinsic_value: 500,
+			deal_score: 30, // 30% deal
+			llm_reasoning: "Great entry level 3080 deal, no signs of mining.",
+			url: "https://carousell.sg/mock",
+			image_url: "",
+		},
+	];
+}
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width" />
+		<title>Carousell Deals Dashboard</title>
+		<script type="module" src="https://cdn.jsdelivr.net/npm/iconify-icon@1/dist/iconify-icon.min.js"></script>
+	</head>
+	<body class="min-h-screen bg-[color:var(--ink-900)] text-[color:var(--paper)]">
+		<main class="max-w-6xl mx-auto p-4 md:p-8">
+			<div class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[color:var(--ink-600)] pb-4">
+				<div>
+					<h1 class="text-3xl font-bold text-[color:var(--paper)]">Carousell Deal Monitor</h1>
+					<p class="text-[color:var(--paper-dim)]">Real-time intrinsic value tracking</p>
+				</div>
+				<a href="/projects/carousell-bot/searches" class="flex gap-2 items-center px-4 py-2 border border-[color:var(--ink-600)] hover:border-[color:var(--accent)] rounded-lg text-sm transition">
+					<iconify-icon icon="mdi:cog" class="text-lg"></iconify-icon>
+					Manage Searches
+				</a>
+			</div>
+			
+			<div class="space-y-6">
+				{deals.length === 0 ? (
+					<p class="text-[color:var(--paper-dim)]">No valid deals found at this time.</p>
+				) : (
+					<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+						{deals.map((deal) => (
+							<div class="relative flex flex-col gap-3 p-5 border border-[color:var(--ink-600)] rounded-xl bg-[color:var(--ink-850)] hover:border-[color:var(--accent)] hover:shadow-lg hover:shadow-[color:var(--accent)]/10 transition group">
+								<div class="flex justify-between items-start">
+									<h2 class="text-lg font-bold text-[color:var(--paper)] group-hover:text-[color:var(--accent)] transition line-clamp-2">
+										{deal.title}
+									</h2>
+									<div class="bg-[color:var(--accent)]/20 text-[color:var(--accent)] px-2 py-1 rounded text-xs font-bold whitespace-nowrap">
+										+{deal.deal_score.toFixed(1)}%
+									</div>
+								</div>
+								
+								<div class="flex justify-between items-baseline mt-2">
+									<div>
+										<p class="text-xs text-[color:var(--paper-dim)] truncate">Listing Price</p>
+										<p class="text-xl font-bold text-[color:var(--paper)]">
+											S${deal.price_sgd.toFixed(2)}
+										</p>
+									</div>
+									<div class="text-right">
+										<p class="text-xs text-[color:var(--paper-dim)]">Intrinsic Value</p>
+										<p class="text-lg font-semibold text-[color:var(--paper-muted)] line-through">
+											S${deal.total_intrinsic_value.toFixed(2)}
+										</p>
+									</div>
+								</div>
+
+								<div class="mt-4 pt-4 border-t border-[color:var(--ink-700)] flex-grow">
+									<p class="text-xs font-semibold text-[color:var(--accent)] mb-1 flex items-center gap-1">
+										<iconify-icon icon="mdi:robot-outline"></iconify-icon>
+										AI Reasoning
+									</p>
+									<p class="text-sm text-[color:var(--paper-muted)] text-ellipsis overflow-hidden line-clamp-3">
+										{deal.llm_reasoning}
+									</p>
+								</div>
+								
+								<div class="mt-auto pt-4 border-t border-[color:var(--ink-700)]">
+									<a href={deal.url} target="_blank" rel="noopener noreferrer" class="flex justify-center items-center gap-2 w-full py-2 bg-[color:var(--ink-600)] hover:bg-[color:var(--accent)] hover:text-black rounded-lg transition text-sm font-semibold">
+										<iconify-icon icon="mdi:open-in-new" class="text-lg"></iconify-icon>
+										View on Carousell
+									</a>
+								</div>
+							</div>
+						))}
+					</div>
+				)}
+			</div>
+		</main>
+	</body>
+</html>
