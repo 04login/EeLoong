@@ -144,7 +144,7 @@ const formatDate = (dateStr: string) => {
         </style>
 	</head>
 	<body class="min-h-screen bg-[color:var(--ink-900)] text-[color:var(--paper)]">
-		<main class="w-full max-w-[96%] xl:max-w-[90%] mx-auto pb-12 pt-4 md:pt-8 md:px-8">
+		<main class="w-full max-w-4xl mx-auto pb-12 pt-4 md:pt-8 md:px-8">
 			<!-- Header -->
             <div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
 				<div>
@@ -226,7 +226,7 @@ const formatDate = (dateStr: string) => {
                         <p class="text-[color:var(--paper-muted)] mt-2 text-sm">Try adjusting your filters or checking back later after the bot runs.</p>
                     </div>
 				) : (
-					<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 items-start">
+					<div class="flex flex-col gap-4 items-stretch max-w-4xl mx-auto w-full">
 						{deals.map((deal) => (
 							<div class="relative flex flex-col border border-[color:var(--ink-600)] rounded-xl bg-[color:var(--ink-900)] overflow-hidden shadow-sm hover:border-[color:var(--accent)]/50 hover:shadow-[color:var(--accent)]/5 transition-all duration-300">
 								
