@@ -224,30 +224,20 @@ const formatDate = (dateStr: string) => {
                                     </h2>
                                 </div>
 								
-								<div class="px-5 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-[color:var(--ink-700)] gap-4 sm:gap-2">
+								<div class="px-5 py-4 flex justify-between items-center sm:items-end border-b border-[color:var(--ink-700)]">
 									<div>
 										<p class="text-[10px] uppercase font-bold text-[color:var(--paper-dim)] mb-0.5 tracking-wide">Asking Price</p>
 										<p class="text-2xl font-black text-white drop-shadow-sm">
 											S${deal.price_sgd.toFixed(2)}
 										</p>
 									</div>
-                                    <div class="hidden sm:block border-l-2 border-[color:var(--ink-700)] border-dashed h-8 mx-2"></div>
-									<div class="text-left sm:text-right">
-										<p class="text-[10px] uppercase font-bold text-[color:var(--paper-dim)] mb-0.5 tracking-wide">Est. Value (Intrinsic)</p>
-										<p class="text-lg font-bold text-[color:var(--paper-muted)] line-through decoration-[color:var(--ink-500)] decoration-2">
-											S${deal.total_intrinsic_value.toFixed(2)}
-										</p>
-									</div>
-								</div>
-
-								<div class="px-5 py-4 bg-[color:var(--ink-900)]">
-									<p class="text-[11px] uppercase font-black text-[color:var(--accent)] mb-1.5 flex items-center gap-1.5">
-										<iconify-icon icon="mdi:brain" class="text-sm"></iconify-icon>
-										Bot Analysis
-									</p>
-									<p class="text-[13px] text-[color:var(--paper-dim)] leading-relaxed italic border-l-2 border-[color:var(--accent)]/40 pl-3">
-										"{deal.llm_reasoning}"
-									</p>
+                                    <div class="text-right">
+                                        <p class="text-[10px] uppercase font-bold text-[color:var(--paper-dim)] mb-0.5 tracking-wide">Posted</p>
+                                        <p class="font-mono text-[13px] text-[color:var(--paper)] flex items-center justify-end gap-1">
+                                            <iconify-icon icon="mdi:clock-time-four-outline" class="text-[color:var(--paper-dim)]"></iconify-icon>
+                                            {formatDate(deal.listed_at)}
+                                        </p>
+                                    </div>
 								</div>
 								
                                 <details class="group border-t border-[color:var(--ink-700)] bg-[color:var(--ink-850)]/50">
@@ -260,21 +250,32 @@ const formatDate = (dateStr: string) => {
                                     </summary>
 
                                     <div class="px-5 pb-5 pt-1 text-[13px] space-y-4">
-                                        <div class="grid grid-cols-2 gap-3 p-3 bg-[color:var(--ink-900)] rounded-lg border border-[color:var(--ink-700)]">
-                                            <div>
-                                                <p class="text-[10px] uppercase font-bold text-[color:var(--paper-muted)] mb-0.5">Posted Date</p>
-                                                <p class="font-mono text-xs text-[color:var(--paper)] flex items-center gap-1 truncate">
-                                                    <iconify-icon icon="mdi:clock-time-four-outline" class="text-[color:var(--paper-dim)]"></iconify-icon>
-                                                    {formatDate(deal.listed_at)}
+                                        
+                                        <!-- Est Value & Analysis moved into details -->
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div class="bg-[color:var(--ink-900)] p-3 rounded-lg border border-[color:var(--ink-700)] flex flex-col justify-center">
+                                                <p class="text-[10px] uppercase font-bold text-[color:var(--paper-dim)] mb-0.5 tracking-wide">Est. Value (Intrinsic)</p>
+                                                <p class="text-lg font-bold text-[color:var(--paper-muted)] line-through decoration-[color:var(--ink-500)] decoration-2">
+                                                    S${deal.total_intrinsic_value.toFixed(2)}
                                                 </p>
                                             </div>
-                                            <div>
+                                            <div class="bg-[color:var(--ink-900)] p-3 rounded-lg border border-[color:var(--ink-700)] flex flex-col justify-center">
                                                 <p class="text-[10px] uppercase font-bold text-[color:var(--paper-muted)] mb-0.5">Seller</p>
-                                                <p class="font-mono text-xs text-[color:var(--paper)] flex items-center gap-1 truncate" title={deal.seller}>
+                                                <p class="font-mono text-[13px] text-[color:var(--paper)] flex items-center gap-1 truncate" title={deal.seller}>
                                                     <iconify-icon icon="mdi:account-outline" class="text-[color:var(--paper-dim)]"></iconify-icon>
                                                     {deal.seller || "Unknown"}
                                                 </p>
                                             </div>
+                                        </div>
+
+                                        <div class="bg-[color:var(--ink-900)] p-3 rounded-lg border border-[color:var(--ink-700)]">
+                                            <p class="text-[10px] uppercase font-black text-[color:var(--accent)] mb-1.5 flex items-center gap-1">
+                                                <iconify-icon icon="mdi:brain" class="text-sm"></iconify-icon>
+                                                Bot Analysis
+                                            </p>
+                                            <p class="text-[13px] text-[color:var(--paper-dim)] leading-relaxed italic border-l-2 border-[color:var(--accent)]/40 pl-3">
+                                                "{deal.llm_reasoning}"
+                                            </p>
                                         </div>
 
                                         {deal.components && (deal.components.trim() !== "") && (
