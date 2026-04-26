@@ -13,6 +13,7 @@ let searches = [];
 const url = new URL(Astro.request.url);
 const filterSearchId = url.searchParams.get("search_id") || "all";
 const textQuery = url.searchParams.get("q") || "";
+const sortOption = url.searchParams.get("sort") || "score_desc";
 
 if (db) {
     // 1. Fetch available searches for the dropdown filter
@@ -38,6 +39,13 @@ if (db) {
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : "";
 
+    // Determine the ORDER BY clause
+    let orderBySql = "ORDER BY a.deal_score DESC";
+    if (sortOption === "date_desc") orderBySql = "ORDER BY l.listed_at DESC";
+    else if (sortOption === "date_asc") orderBySql = "ORDER BY l.listed_at ASC";
+    else if (sortOption === "price_asc") orderBySql = "ORDER BY l.price_sgd ASC";
+    else if (sortOption === "price_desc") orderBySql = "ORDER BY l.price_sgd DESC";
+
 	const query = `
 		SELECT 
 			l.listing_id,
@@ -56,7 +64,7 @@ if (db) {
 		JOIN listing_analysis a ON l.listing_id = a.listing_id
         LEFT JOIN monitored_searches s ON l.search_id = s.search_id
 		${whereSql}
-		ORDER BY a.deal_score DESC
+		${orderBySql}
 	`;
 
     // 3. Execute the custom statement
@@ -161,11 +169,22 @@ const formatDate = (dateStr: string) => {
                         </select>
                     </div>
 
+                    <div class="w-full md:w-auto min-w-[170px]">
+                        <label for="sort" class="block text-[color:var(--paper-dim)] text-xs font-semibold uppercase tracking-wider mb-1.5 ml-0.5">Sort By</label>
+                        <select id="sort" name="sort" class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 text-sm text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)] transition appearance-none cursor-pointer">
+                            <option value="score_desc" selected={sortOption === "score_desc"}>Highest Deal Score</option>
+                            <option value="date_desc" selected={sortOption === "date_desc"}>Newest First</option>
+                            <option value="date_asc" selected={sortOption === "date_asc"}>Oldest First</option>
+                            <option value="price_asc" selected={sortOption === "price_asc"}>Price: Low to High</option>
+                            <option value="price_desc" selected={sortOption === "price_desc"}>Price: High to Low</option>
+                        </select>
+                    </div>
+
                     <div class="w-full md:w-auto flex gap-2">
                         <button type="submit" class="flex-grow md:flex-grow-0 bg-[color:var(--accent)] hover:bg-[color:var(--accent-light)] text-gray-900 font-bold py-2 px-6 rounded-md transition duration-200 shadow-sm flex items-center justify-center gap-2">
                             Apply
                         </button>
-                        {(filterSearchId !== "all" || textQuery !== "") && (
+                        {(filterSearchId !== "all" || textQuery !== "" || sortOption !== "score_desc") && (
                             <a href="/projects/carousell-bot" class="flex-grow md:flex-grow-0 bg-[color:var(--ink-700)] hover:bg-[color:var(--ink-600)] text-[color:var(--paper)] font-semibold py-2 px-4 rounded-md transition duration-200 flex items-center justify-center text-sm" title="Clear Filters">
                                 <iconify-icon icon="mdi:close"></iconify-icon>
                             </a>
