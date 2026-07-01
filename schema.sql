@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS monitored_searches (
 
 CREATE TABLE IF NOT EXISTS listings (
     listing_id TEXT PRIMARY KEY,
-    search_id INTEGER REFERENCES monitored_searches(search_id),
+    search_id INTEGER REFERENCES monitored_searches(search_id) ON DELETE CASCADE,
     title TEXT,
     description TEXT,
     price_sgd REAL,
@@ -33,3 +33,4 @@ CREATE TABLE IF NOT EXISTS listing_analysis (
     deal_score REAL,
     llm_reasoning TEXT
 );
+

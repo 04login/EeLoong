@@ -42,9 +42,9 @@ if (Astro.request.method === "POST" && db) {
     } else if (action === "delete") {
       const search_id = data.get("search_id");
       if (search_id) {
-        await db.prepare(
-          `DELETE FROM monitored_searches WHERE search_id = ?`
-        ).bind(search_id).run();
+                await db.prepare(
+                    `DELETE FROM monitored_searches WHERE search_id = ?`
+                ).bind(search_id).run();
         successMessage = "Search deleted successfully.";
       }
     }
