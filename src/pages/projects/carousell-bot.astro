@@ -31,7 +31,7 @@ if (db) {
         whereClauses.push("l.search_id = ?");
         queryArgs.push(filterSearchId);
     }
-    
+
     if (textQuery) {
         whereClauses.push("(l.title LIKE ? OR l.description LIKE ?)");
         queryArgs.push(`%${textQuery}%`);
@@ -61,7 +61,7 @@ if (db) {
     else if (sortOption === "price_desc") orderBySql = "ORDER BY l.price_sgd DESC";
 
 	const query = `
-		SELECT 
+		SELECT
 			l.listing_id,
 			l.title,
 			l.price_sgd,
@@ -172,7 +172,7 @@ const formatDate = (dateStr: string) => {
                             <input type="text" id="q" name="q" value={textQuery} placeholder="Filter keywords..." class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md pl-10 pr-3 py-2 text-sm text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)] transition">
                         </div>
                     </div>
-                    
+
                     <div class="w-full md:w-auto min-w-[200px]">
                         <label for="search_id" class="block text-[color:var(--paper-dim)] text-xs font-semibold uppercase tracking-wider mb-1.5 ml-0.5">Category</label>
                         <select id="search_id" name="search_id" class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 text-sm text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)] transition appearance-none cursor-pointer">
@@ -217,7 +217,7 @@ const formatDate = (dateStr: string) => {
                     </div>
                 </form>
             </div>
-			
+
 			<div class="space-y-6">
 				{deals.length === 0 ? (
 					<div class="text-center py-16 border border-[color:var(--ink-700)] border-dashed rounded-2xl bg-[color:var(--ink-850)]/50">
@@ -226,112 +226,117 @@ const formatDate = (dateStr: string) => {
                         <p class="text-[color:var(--paper-muted)] mt-2 text-sm">Try adjusting your filters or checking back later after the bot runs.</p>
                     </div>
 				) : (
-					<div class="flex flex-col gap-4 items-stretch w-full">
-						{deals.map((deal) => (
-							<div class="relative flex flex-col border border-[color:var(--ink-600)] rounded-xl bg-[color:var(--ink-900)] overflow-hidden shadow-sm hover:border-[color:var(--accent)]/50 hover:shadow-[color:var(--accent)]/5 transition-all duration-300">
-								
-                                <div class="bg-[color:var(--ink-850)] px-5 py-4 border-b border-[color:var(--ink-700)]">
-                                    <div class="flex justify-between items-start gap-3 mb-2">
-                                        <div class="flex flex-col items-start gap-1">
-                                            {deal.search_name && (
-                                                <span class="text-[10px] font-bold uppercase tracking-wider text-[color:var(--paper-muted)] bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] px-2 py-0.5 rounded">
-                                                    {deal.search_name}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div class="bg-gradient-to-r from-green-500/20 to-[color:var(--accent)]/20 text-green-300 border border-green-500/30 px-2.5 py-1 rounded text-sm font-black whitespace-nowrap shadow-sm flex items-center gap-1">
-                                            <iconify-icon icon="mdi:fire" class="text-green-400"></iconify-icon>
-                                            +{deal.deal_score.toFixed(1)}%
-                                        </div>
-                                    </div>
-                                    <h2 class="text-[1.05rem] leading-snug font-bold text-[color:var(--paper)] mt-1" title={deal.title}>
-                                        {deal.title}
-                                    </h2>
-                                </div>
-								
-								<div class="px-5 py-4 flex justify-between items-center sm:items-end border-b border-[color:var(--ink-700)]">
-									<div>
-										<p class="text-[10px] uppercase font-bold text-[color:var(--paper-dim)] mb-0.5 tracking-wide">Asking Price</p>
-										<p class="text-2xl font-black text-white drop-shadow-sm">
-											S${deal.price_sgd.toFixed(2)}
-										</p>
-									</div>
-                                    <div class="text-right">
-                                        <p class="text-[10px] uppercase font-bold text-[color:var(--paper-dim)] mb-0.5 tracking-wide">Posted</p>
-                                        <p class="font-mono text-[13px] text-[color:var(--paper)] flex items-center justify-end gap-1">
-                                            <iconify-icon icon="mdi:clock-time-four-outline" class="text-[color:var(--paper-dim)]"></iconify-icon>
-                                            {formatDate(deal.listed_at)}
-                                        </p>
-                                    </div>
-								</div>
-								
-                                <details class="group border-t border-[color:var(--ink-700)] bg-[color:var(--ink-850)]/50">
-                                    <summary class="px-5 py-3 text-xs font-bold text-[color:var(--paper-muted)] group-hover:bg-[color:var(--ink-800)] group-hover:text-[color:var(--paper)] flex items-center justify-between cursor-pointer transition select-none">
-                                        <span class="flex items-center gap-2">
-                                            <iconify-icon icon="mdi:information-outline" class="text-base"></iconify-icon>
-                                            View Full Details
-                                        </span>
-                                        <iconify-icon icon="mdi:chevron-down" class="text-lg transition-transform duration-300 group-open:rotate-180"></iconify-icon>
-                                    </summary>
-
-                                    <div class="px-5 pb-5 pt-1 text-[13px] space-y-4">
-                                        
-                                        <!-- Est Value & Analysis moved into details -->
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div class="bg-[color:var(--ink-900)] p-3 rounded-lg border border-[color:var(--ink-700)] flex flex-col justify-center">
-                                                <p class="text-[10px] uppercase font-bold text-[color:var(--paper-dim)] mb-0.5 tracking-wide">Est. Value (Intrinsic)</p>
-                                                <p class="text-lg font-bold text-[color:var(--paper-muted)] line-through decoration-[color:var(--ink-500)] decoration-2">
-                                                    S${deal.total_intrinsic_value.toFixed(2)}
-                                                </p>
-                                            </div>
-                                            <div class="bg-[color:var(--ink-900)] p-3 rounded-lg border border-[color:var(--ink-700)] flex flex-col justify-center">
-                                                <p class="text-[10px] uppercase font-bold text-[color:var(--paper-muted)] mb-0.5">Seller</p>
-                                                <p class="font-mono text-[13px] text-[color:var(--paper)] flex items-center gap-1 truncate" title={deal.seller}>
-                                                    <iconify-icon icon="mdi:account-outline" class="text-[color:var(--paper-dim)]"></iconify-icon>
-                                                    {deal.seller || "Unknown"}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <div class="bg-[color:var(--ink-900)] p-3 rounded-lg border border-[color:var(--ink-700)]">
-                                            <p class="text-[10px] uppercase font-black text-[color:var(--accent)] mb-1.5 flex items-center gap-1">
-                                                <iconify-icon icon="mdi:brain" class="text-sm"></iconify-icon>
-                                                Bot Analysis
-                                            </p>
-                                            <p class="text-[13px] text-[color:var(--paper-dim)] leading-relaxed italic border-l-2 border-[color:var(--accent)]/40 pl-3">
-                                                "{deal.llm_reasoning}"
-                                            </p>
-                                        </div>
-
-                                        {deal.components && (deal.components.trim() !== "") && (
-                                            <div>
-                                                <p class="text-[10px] uppercase font-bold text-[color:var(--paper-muted)] mb-1">Identified Components</p>
-                                                <div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-2.5 font-mono text-xs text-[color:var(--accent)]/80 break-words whitespace-pre-wrap">
-                                                    {deal.components}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <div>
-                                            <p class="text-[10px] uppercase font-bold text-[color:var(--paper-muted)] mb-1 flex items-center gap-1">
-                                                <iconify-icon icon="mdi:text-box-outline"></iconify-icon>
-                                                Raw Description
-                                            </p>
-                                            <div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-3 text-[color:var(--paper-dim)] whitespace-pre-wrap max-h-48 overflow-y-auto text-xs leading-relaxed custom-scrollbar">
-                                                {deal.description || "No description provided."}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </details>
-
-								<div class="bg-[color:var(--ink-900)] border-t border-[color:var(--ink-700)]">
-									<a href={deal.url} target="_blank" rel="noopener noreferrer" class="flex justify-center items-center gap-2 w-full py-3.5 bg-[color:var(--ink-800)] hover:bg-[color:var(--accent)] hover:text-black transition-all text-sm font-bold shadow-sm rounded-b-[10px]">
-										View on Carousell
-                                        <iconify-icon icon="mdi:arrow-top-right" class="text-lg"></iconify-icon>
-									</a>
-								</div>
-							</div>
-						))}
+					<div class="overflow-x-auto border border-[color:var(--ink-600)] rounded-xl bg-[color:var(--ink-850)]">
+						<table class="w-full border-collapse">
+							<thead class="bg-[color:var(--ink-900)] border-b border-[color:var(--ink-600)]">
+								<tr>
+									<th class="w-10 px-3 py-3 text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider"><iconify-icon icon="mdi:chevron-down" class="text-[color:var(--paper-dim)] text-lg"></iconify-icon></th>
+									<th class="px-3 py-3 text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider">Title</th>
+									<th class="px-3 py-3 text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider hidden md:table-cell">Category</th>
+									<th class="px-3 py-3 text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider hidden lg:table-cell">Posted</th>
+									<th class="px-3 py-3 text-right text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider hidden md:table-cell">Price</th>
+									<th class="px-3 py-3 text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider hidden lg:table-cell">Seller</th>
+									<th class="w-12 px-3 py-3 text-center text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider"><iconify-icon icon="mdi:open-in-new" class="text-[color:var(--paper-dim)] text-lg"></iconify-icon></th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-[color:var(--ink-600)]">
+								{deals.map((deal) => (
+									<>
+										<tr class="hover:bg-[color:var(--ink-800)] transition-colors cursor-pointer group" data-deal-id={deal.listing_id}>
+											<td class="px-3 py-3 text-center">
+												<iconify-icon icon="mdi:chevron-down" class="text-[color:var(--paper-dim)] text-lg transition-transform duration-200 expand-icon"></iconify-icon>
+											</td>
+											<td class="px-3 py-3">
+												<p class="font-medium text-[color:var(--paper)] group-hover:text-[color:var(--accent)] transition-colors truncate max-w-xs md:max-w-md lg:max-w-lg" title={deal.title}>{deal.title}</p>
+											</td>
+											<td class="px-3 py-3 hidden md:table-cell">
+												<span class="px-2 py-0.5 text-xs rounded-lg bg-[color:var(--ink-800)] text-[color:var(--paper)] border border-[color:var(--ink-600)] hover:border-[color:var(--accent)] hover:text-[color:var(--accent)] transition">{deal.search_name || "N/A"}</span>
+											</td>
+											<td class="px-3 py-3 text-xs text-[color:var(--paper-dim)] hidden lg:table-cell">{formatDate(deal.listed_at)}</td>
+											<td class="px-3 py-3 text-right hidden md:table-cell">
+												<div class="flex flex-col items-end gap-0.5">
+													<span class="font-semibold text-[color:var(--accent)] text-sm">S${deal.price_sgd.toFixed(2)}</span>
+													<div class="bg-gradient-to-r from-green-500/20 to-[color:var(--accent)]/20 text-green-300 border border-green-500/30 px-2 py-0.5 rounded text-xs font-black whitespace-nowrap shadow-sm flex items-center gap-1">
+														<iconify-icon icon="mdi:fire" class="text-green-400"></iconify-icon>
+														+{deal.deal_score.toFixed(1)}%
+													</div>
+												</div>
+											</td>
+											<td class="px-3 py-3 text-xs text-[color:var(--paper-dim)] hidden lg:table-cell">{deal.seller || "Unknown"}</td>
+											<td class="px-3 py-3 text-center">
+												<a href={deal.url} target="_blank" rel="noopener noreferrer" class="text-[color:var(--accent)] hover:text-[color:var(--paper)] transition" onclick={(e) => e.stopPropagation()}>
+													<iconify-icon icon="mdi:open-in-new" class="text-xl"></iconify-icon>
+												</a>
+											</td>
+										</tr>
+										<tr class="expand-row hidden" data-deal-id={deal.listing_id}>
+											<td colspan="7" class="px-0 py-0">
+												<div class="px-6 py-4 bg-[color:var(--ink-900)] border-t border-[color:var(--ink-600)] animate-expand">
+													<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+														<div class="md:col-span-2 lg:col-span-2">
+															<p class="text-xs font-semibold text-[color:var(--accent)] mb-1">Category</p>
+															<span class="px-2 py-1 text-xs rounded-lg bg-[color:var(--ink-800)] text-[color:var(--paper)] border border-[color:var(--ink-600)] inline-block">{deal.search_name || "N/A"}</span>
+														</div>
+														<div>
+															<p class="text-xs font-semibold text-[color:var(--accent)] mb-1">Posted</p>
+															<p class="text-xs text-[color:var(--paper-dim)] flex items-center gap-1">
+																<iconify-icon icon="mdi:calendar-outline" class="text-[color:var(--accent)]"></iconify-icon>
+																{formatDate(deal.listed_at)}
+															</p>
+														</div>
+														<div>
+															<p class="text-xs font-semibold text-[color:var(--accent)] mb-1">Seller</p>
+															<p class="text-xs text-[color:var(--paper-dim)] flex items-center gap-1">
+																<iconify-icon icon="mdi:store-outline" class="text-[color:var(--accent)]"></iconify-icon>
+																{deal.seller || "Unknown"}
+															</p>
+														</div>
+														<div class="md:col-span-2 lg:col-span-2">
+															<p class="text-xs font-semibold text-[color:var(--accent)] mb-1">Est. Value & Score</p>
+															<div class="flex flex-wrap items-center gap-2 text-sm">
+																<span class="font-bold text-[color:var(--accent)]">S${deal.price_sgd.toFixed(2)}</span>
+																<span class="text-[color:var(--paper-dim)] line-through">S${deal.total_intrinsic_value.toFixed(2)}</span>
+																<div class="bg-gradient-to-r from-green-500/20 to-[color:var(--accent)]/20 text-green-300 border border-green-500/30 px-2 py-0.5 rounded text-xs font-black whitespace-nowrap shadow-sm flex items-center gap-1">
+																	<iconify-icon icon="mdi:fire" class="text-green-400"></iconify-icon>
+																	+{deal.deal_score.toFixed(1)}%
+																</div>
+															</div>
+														</div>
+														<div class="md:col-span-2 lg:col-span-4">
+															<p class="text-xs font-semibold text-[color:var(--accent)] mb-1">Bot Analysis</p>
+															<p class="text-[13px] text-[color:var(--paper-dim)] leading-relaxed italic border-l-2 border-[color:var(--accent)]/40 pl-3">"{deal.llm_reasoning}"</p>
+														</div>
+														{deal.components && (deal.components.trim() !== "") && (
+															<div class="md:col-span-2 lg:col-span-4">
+																<p class="text-xs font-semibold text-[color:var(--accent)] mb-1">Identified Components</p>
+																<div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-2.5 font-mono text-xs text-[color:var(--accent)]/80 break-words whitespace-pre-wrap">
+																	{deal.components}
+																</div>
+															</div>
+														)}
+														<div class="md:col-span-2 lg:col-span-4">
+															<p class="text-xs font-semibold text-[color:var(--accent)] mb-1 flex items-center gap-1">
+																<iconify-icon icon="mdi:text-box-outline"></iconify-icon>
+																Raw Description
+															</p>
+															<div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-3 text-[color:var(--paper-dim)] whitespace-pre-wrap max-h-48 overflow-y-auto text-xs leading-relaxed custom-scrollbar">
+																{deal.description || "No description provided."}
+															</div>
+														</div>
+														<div class="md:col-span-2 lg:col-span-4">
+															<a href={deal.url} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[color:var(--paper)] bg-[color:var(--accent)]/10 border border-[color:var(--accent)]/30 rounded-lg hover:bg-[color:var(--accent)]/20 hover:border-[color:var(--accent)] transition">
+																<iconify-icon icon="mdi:open-in-new" class="text-lg"></iconify-icon>
+																View Deal on Carousell
+															</a>
+														</div>
+													</div>
+												</div>
+											</td>
+										</tr>
+									</>
+								))}
+							</tbody>
+						</table>
 					</div>
 				)}
 			</div>
