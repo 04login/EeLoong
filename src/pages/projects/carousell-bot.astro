@@ -344,6 +344,9 @@ const formatDate = (dateStr: string) => {
 
 		<script>
 			document.addEventListener('click', (e) => {
+				// Don't toggle if clicking inside an expanded row (to allow copy/paste, links, etc.)
+				if (e.target.closest('tr.expand-row')) return;
+
 				const row = e.target.closest('tr[data-deal-id]');
 				if (!row) return;
 
