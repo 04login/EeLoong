@@ -172,6 +172,23 @@ export const projects: Project[] = [
 		link: '/projects/carousellbot',
 		featured: true
 	}
+	,
+	{
+		id: 6,
+		title: 'Valuation Desk',
+		role: 'Tool',
+		period: '2026',
+		institution: 'Personal Project',
+		description: 'Interactive discounted cash flow workbench and valuation tool built with vanilla JS and Chart.js.',
+		achievements: [
+			'Interactive DCF builder with projections, sensitivity, and comps cross-check',
+			'Exportable model JSON/CSV and editable projections',
+			'Client-side data fetch from Financial Modeling Prep API (optional)'
+		],
+		technologies: ['JavaScript', 'Chart.js', 'Astro'],
+		link: '/projects/valuation',
+		featured: false
+	}
 ];
 
 export const skills = {
