@@ -22,13 +22,19 @@ import { me } from "../../data/profile.ts";
 :root{ --bg:#10161F; --bg-panel:#161E2B; --bg-panel-2:#1C2536; --bg-input:#0D131B; --ink:#EDE7D9; --ink-dim:#8C96AB; --ink-faint:#5B6478; --hairline:#2A3446; --brass:#C9A227; --brass-soft:rgba(201,162,39,0.14); --positive:#6FB98F; --negative:#D97B7B; --blue:#6E9BC9; --teal:#4F9C93; --radius:3px; --font-display:'Source Serif 4', Georgia, serif; --font-body:'Inter', system-ui, -apple-system, sans-serif; --font-mono:'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; }
 *{ box-sizing:border-box; }
 html,body{ margin:0; padding:0; }
+/* prevent horizontal overflow and ensure the app can use full width */
+html, body { width:100%; overflow-x:hidden; height:100%; }
 body{ background:var(--bg); color:var(--ink); font-family:var(--font-body); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
 a{ color:var(--brass); } ::selection{ background:var(--brass-soft); color:var(--ink); }
 input, select, button{ font-family:var(--font-mono); font-size:13px; color:var(--ink); background:var(--bg-input); border:1px solid var(--hairline); border-radius:var(--radius); padding:6px 8px; }
 input:focus-visible, select:focus-visible, button:focus-visible{ outline:2px solid var(--brass); outline-offset:1px; }
 input[type="number"]{ width:100%; min-width:0; } button{ font-family:var(--font-body); font-weight:600; cursor:pointer; background:var(--bg-panel-2); transition:border-color .15s ease, color .15s ease; }
 button:hover{ border-color:var(--brass); color:var(--brass); } button:disabled{ opacity:.5; cursor:default; }
-.app{ max-width:1320px; margin:0 auto; padding:28px 24px 60px; }
+.app{ max-width:1320px; width:100%; margin:0 auto; padding:18px 16px 40px; box-sizing:border-box; min-height:100vh; }
+/* Ensure charts and tables never overflow horizontally */
+.chart-wrap{ padding:16px; height:320px; max-width:100%; box-sizing:border-box; }
+canvas{ max-width:100% !important; height:auto !important; }
+.table-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .topbar{ display:flex; flex-wrap:wrap; gap:20px; justify-content:space-between; align-items:flex-end; border-bottom:1px solid var(--hairline); padding-bottom:18px; margin-bottom:18px; }
 .eyebrow{ display:block; font-family:var(--font-mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--brass); margin-bottom:4px; }
 .brand h1{ font-family:var(--font-display); font-weight:600; font-style:italic; font-size:30px; margin:0; letter-spacing:.01em; }
