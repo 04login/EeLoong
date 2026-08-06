@@ -49,7 +49,7 @@ button:hover{ border-color:var(--brass); color:var(--brass); } button:disabled{ 
   </head>
   <body class="min-h-screen bg-[color:var(--ink-900)] text-[color:var(--paper)]">
     <main class="min-h-screen">
-      <div class="grid min-h-screen grid-cols-1 lg:grid-cols-[1fr_auto]">
+      <div class="grid min-h-screen grid-cols-1 lg:grid-cols-1">
         <div class="flex flex-col justify-start gap-0 mx-3 my-3 md:mx-5 md:my-5 lg:order-1 mb-32 lg:mb-5">
 
           <!-- Valuation app inserted here -->
@@ -191,17 +191,7 @@ button:hover{ border-color:var(--brass); color:var(--brass); } button:disabled{ 
 
         </div>
 
-        <div class="fixed lg:static bottom-0 left-0 right-0 z-50 bg-[color:var(--ink-900)] flex min-h-auto lg:min-h-screen flex-col items-start justify-center gap-3 md:gap-4 p-5 md:p-10 text-left lg:sticky lg:top-0 lg:self-start lg:order-2 border-t lg:border-t-0 border-[color:var(--ink-700)]">
-          <div class="text-5xl md:text-7xl lg:text-9xl font-semibold">
-            <span class="lg:hidden">{me.name}</span>
-            <span class="hidden lg:block whitespace-pre-line">{me.name}</span>
-          </div>
-          <div class="flex gap-2 md:gap-3 text-sm">
-            <a class="flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-full border border-[color:var(--ink-500)] text-[color:var(--paper)] transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]" href={me.Email} aria-label="Email"><iconify-icon icon="mdi:email-outline" class="inline-flex h-5 w-5 items-center justify-center"></iconify-icon></a>
-            <a class="flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-full border border-[color:var(--ink-500)] text-[color:var(--paper)] transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]" href={me.LinkedIn} target="_blank" rel="noreferrer" aria-label="LinkedIn"><iconify-icon icon="mdi:linkedin" class="inline-flex h-5 w-5 items-center justify-center"></iconify-icon></a>
-            <a class="flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-full border border-[color:var(--ink-500)] text-[color:var(--paper)] transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]" href="https://github.com" target="_blank" rel="noreferrer" aria-label="GitHub"><iconify-icon icon="mdi:github" class="inline-flex h-5 w-5 items-center justify-center"></iconify-icon></a>
-          </div>
-        </div>
+        <!-- Author sidebar removed for this page to give full width to the valuation app -->
       </div>
     </main>
 
