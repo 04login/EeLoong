@@ -169,7 +169,7 @@ export const projects: Project[] = [
 			'Integrated local Windows Task Scheduler automation with a Cloudflare Pages dashboard (Astro) for continuous monitoring and admin search management'
 		],
 		technologies: ['Python', 'curl_cffi', 'LiteLLM', 'Cloudflare D1', 'Cloudflare Pages', 'Astro', 'Tailwind CSS', 'Windows Task Scheduler'],
-		link: '/projects/carousellbot',
+		link: '/projects/carousell-bot',
 		featured: true
 	}
 	,
