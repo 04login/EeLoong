@@ -4,10 +4,12 @@ type Env = {
 	DB: D1Database;
 };
 
-type Runtime = import('@astrojs/cloudflare').Runtime<Env>;
+declare module "cloudflare:workers" {
+	export const env: Env;
+}
 
 declare namespace App {
-	interface Locals extends Runtime {
+	interface Locals {
 		// Allows you to add properties to Astro.locals
 	}
 }
