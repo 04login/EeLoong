@@ -1,8 +1,13 @@
-name = "carousell-bot-dashboard"
+name = "eeloong"
 compatibility_date = "2026-04-26"
-compatibility_flags = [ "nodejs_compat" ]
+compatibility_flags = ["nodejs_compat"]
+main = "./dist/_worker.js/index.js"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "carousell-bot"
-database_id = "d1571101-a141-4378-89c9-f5693a691a34" # Replace with your actual D1 ID
+database_id = "d1571101-a141-4378-89c9-f5693a691a34"
