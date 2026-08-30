@@ -1,0 +1,109 @@
+---
+import "../../styles/global.css";
+import { searchTickers } from "../../../lib/stock-research/index.ts";
+
+export const prerender = false;
+
+const url = new URL(Astro.request.url);
+const q = url.searchParams.get("q")?.trim() ?? "";
+
+let results: Awaited<ReturnType<typeof searchTickers>> = [];
+let error: string | null = null;
+
+if (q.length >= 1) {
+  try {
+    results = await searchTickers(q);
+  } catch {
+    error = "Search unavailable right now — please try again.";
+  }
+}
+---
+
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="viewport" content="width=device-width" />
+  <title>Stock Research</title>
+  <script is:inline type="module" src="https://cdn.jsdelivr.net/npm/iconify-icon@1/dist/iconify-icon.min.js"></script>
+</head>
+<body class="min-h-screen bg-[color:var(--ink-900)] text-[color:var(--paper)]">
+  <main class="w-full max-w-[96%] xl:max-w-[800px] mx-auto pb-12 pt-4 md:pt-8 md:px-8">
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-[color:var(--paper)] flex items-center gap-3">
+        <iconify-icon icon="mdi:chart-line" class="text-[color:var(--accent)] text-4xl"></iconify-icon>
+        Stock Research
+      </h1>
+      <p class="text-[color:var(--paper-dim)] mt-1 ml-11">Live PE, P/S, PEG from Yahoo Finance. Any ticker, on demand.</p>
+    </div>
+
+    <form method="GET" class="mb-8">
+      <div class="relative max-w-md">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <iconify-icon icon="mdi:magnify" class="text-[color:var(--paper-muted)]"></iconify-icon>
+        </div>
+        <input
+          type="search"
+          name="q"
+          value={q}
+          placeholder="Enter ticker (AAPL, MSFT, D05.SI…) or company name"
+          class="w-full bg-[color:var(--ink-850)] border border-[color:var(--ink-700)] rounded-md pl-10 pr-3 py-2.5 text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)] transition"
+          autocomplete="off"
+        />
+      </div>
+      <p class="text-xs text-[color:var(--paper-muted)] mt-1.5 ml-0.5">
+        US tickers: <code class="text-[color:var(--accent)]">AAPL</code>, <code class="text-[color:var(--accent)]">MSFT</code>, <code class="text-[color:var(--accent)]">NVDA</code> · SGX: <code class="text-[color:var(--accent)]">D05.SI</code>, <code class="text-[color:var(--accent)]">U11.SI</code>
+      </p>
+    </form>
+
+    {error && (
+      <div class="mb-6 p-4 bg-[color:var(--ink-850)] border border-[color:var(--accent)]/30 rounded-lg text-[color:var(--accent)]">
+        {error}
+      </div>
+    )}
+
+    {q.length >= 1 && results.length > 0 && (
+      <div class="bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl overflow-hidden">
+        <table class="w-full border-collapse">
+          <thead class="bg-[color:var(--ink-900)] border-b border-[color:var(--ink-600)]">
+            <tr>
+              <th class="w-10 px-3 py-3 text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider"></th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider">Symbol</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider hidden md:table-cell">Name</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider hidden lg:table-cell">Exchange</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider hidden lg:table-cell">Sector</th>
+              <th class="w-16 px-3 py-3 text-center text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-[color:var(--ink-600)]">
+            {results.map((r) => (
+              <tr class="hover:bg-[color:var(--ink-800)] transition-colors">
+                <td class="px-3 py-3 text-center">
+                  <iconify-icon icon="mdi:chevron-right" class="text-[color:var(--paper-dim)] text-lg"></iconify-icon>
+                </td>
+                <td class="px-3 py-3 font-mono font-semibold text-[color:var(--accent)]">{r.symbol}</td>
+                <td class="px-3 py-3 text-[color:var(--paper)] hidden md:table-cell">{r.shortName}</td>
+                <td class="px-3 py-3 text-[color:var(--paper-dim)] hidden lg:table-cell">{r.exchange ?? "—"}</td>
+                <td class="px-3 py-3 text-[color:var(--paper-dim)] hidden lg:table-cell">{r.sector ?? "—"}</td>
+                <td class="px-3 py-3 text-center">
+                  <a href={`/projects/stocks/${encodeURIComponent(r.symbol)}`} class="text-[color:var(--accent)] hover:text-[color:var(--paper)] transition flex items-center justify-center">
+                    <iconify-icon icon="mdi:open-in-new" class="text-xl"></iconify-icon>
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+
+    {q.length >= 1 && results.length === 0 && !error && (
+      <div class="text-center py-12 border border-[color:var(--ink-700)] border-dashed rounded-2xl bg-[color:var(--ink-850)]/50">
+        <iconify-icon icon="mdi:search-off" class="text-5xl text-[color:var(--ink-600)] mb-3"></iconify-icon>
+        <h3 class="text-xl font-bold text-[color:var(--paper-dim)]">No matches</h3>
+        <p class="text-[color:var(--paper-muted)] mt-2 text-sm">Try a different spelling or the full ticker (e.g. <code class="text-[color:var(--accent)]">D05.SI</code> for DBS).</p>
+      </div>
+    )}
+  </main>
+</body>
+</html>

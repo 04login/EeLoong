@@ -8,6 +8,6 @@ export default defineConfig({
   output: "server",
   adapter: cloudflare(),
   vite: {
-    plugins: [tailwindcss()]
-  }
+    plugins: [tailwindcss()],
+  },
 });

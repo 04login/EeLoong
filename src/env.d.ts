@@ -1,7 +1,9 @@
 type D1Database = import('@cloudflare/workers-types/2023-03-03').D1Database;
+type KVNamespace = import('@cloudflare/workers-types/2023-03-03').KVNamespace;
 
 type Env = {
 	DB: D1Database;
+	STOCK_CACHE: KVNamespace;
 };
 
 declare module "cloudflare:workers" {

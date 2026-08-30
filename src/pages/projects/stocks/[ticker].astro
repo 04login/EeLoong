@@ -1,0 +1,207 @@
+---
+import "../../styles/global.css";
+import { lookupTicker, type Fundamentals, type TickerQuote } from "../../../lib/stock-research/index.ts";
+
+export const prerender = false;
+
+const { ticker } = Astro.params;
+if (!ticker) throw new Error("Missing ticker param");
+
+const result = await lookupTicker(ticker);
+const { quote, fundamentals, error } = result;
+
+const formatNumber = (n: number | null, decimals = 2): string => {
+  if (n === null || !isFinite(n)) return "—";
+  if (Math.abs(n) >= 1e12) return `${(n / 1e12).toFixed(decimals)}T`;
+  if (Math.abs(n) >= 1e9) return `${(n / 1e9).toFixed(decimals)}B`;
+  if (Math.abs(n) >= 1e6) return `${(n / 1e6).toFixed(decimals)}M`;
+  if (Math.abs(n) >= 1e3) return `${(n / 1e3).toFixed(decimals)}K`;
+  return n.toFixed(decimals);
+};
+
+const formatPercent = (n: number | null): string => {
+  if (n === null || !isFinite(n)) return "—";
+  const sign = n > 0 ? "+" : "";
+  return `${sign}${(n * 100).toFixed(2)}%`;
+};
+
+const ratioClass = (v: number | null): string => {
+  if (v === null) return "text-[color:var(--paper-muted)]";
+  if (v < 10) return "text-green-400";
+  if (v < 20) return "text-yellow-300";
+  return "text-red-400";
+};
+---
+
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="viewport" content="width=device-width" />
+  <title>{quote?.shortName ?? ticker.toUpperCase()} — Stock Research</title>
+  <script is:inline type="module" src="https://cdn.jsdelivr.net/npm/iconify-icon@1/dist/iconify-icon.min.js"></script>
+</head>
+<body class="min-h-screen bg-[color:var(--ink-900)] text-[color:var(--paper)]">
+  <main class="w-full max-w-[96%] xl:max-w-[900px] mx-auto pb-12 pt-4 md:pt-8 md:px-8">
+    <!-- Header -->
+    <div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-bold text-[color:var(--paper)] flex items-center gap-3">
+          <iconify-icon icon="mdi:chart-line" class="text-[color:var(--accent)] text-4xl"></iconify-icon>
+          {quote?.shortName ?? ticker.toUpperCase()}
+        </h1>
+        <p class="text-[color:var(--paper-dim)] ml-11 text-sm">
+          {quote?.longName ?? "—"} · {quote?.exchange ?? "—"} · {quote?.market ?? "—"}
+        </p>
+      </div>
+      <a href="/projects/stocks" class="flex gap-2 items-center px-4 py-2 border border-[color:var(--ink-600)] bg-[color:var(--ink-850)] hover:bg-[color:var(--ink-800)] hover:border-[color:var(--accent)] rounded-lg text-sm transition font-semibold shadow-sm">
+        <iconify-icon icon="mdi:arrow-left" class="text-lg text-[color:var(--accent)]"></iconify-icon>
+        Back to Search
+      </a>
+    </div>
+
+    {error && (
+      <div class="mb-6 p-4 bg-[color:var(--ink-850)] border border-[color:var(--accent)]/30 rounded-lg text-[color:var(--accent)]">
+        <strong>Could not load data for {ticker.toUpperCase()}.</strong>
+        <p class="text-sm mt-1">Yahoo Finance may be blocking this region, the ticker may not exist, or the endpoint changed. Try again later.</p>
+      </div>
+    )}
+
+    {!error && quote && (
+      <>
+        <!-- Price Header -->
+        <div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
+          <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <p class="text-[color:var(--paper-dim)] text-xs font-semibold uppercase tracking-wider mb-1">Price</p>
+              <p class="text-4xl font-bold text-[color:var(--paper)]">
+                {quote.currency === "USD" ? "$" : quote.currency === "SGD" ? "S$" : ""}
+                {formatNumber(quote.price, 2)}
+              </p>
+            </div>
+            <div class="flex items-end gap-4 text-right md:text-left">
+              <div>
+                <p class="text-[color:var(--paper-dim)] text-xs font-semibold uppercase tracking-wider mb-1">Change</p>
+                <p class="text-lg font-semibold {quote.change !== null && quote.change >= 0 ? "text-green-400" : "text-red-400"}">
+                  {quote.change !== null ? (quote.change >= 0 ? "+" : "") + formatNumber(quote.change, 2) : "—"}
+                </p>
+              </div>
+              <div>
+                <p class="text-[color:var(--paper-dim)] text-xs font-semibold uppercase tracking-wider mb-1">Change %</p>
+                <p class="text-lg font-semibold {quote.changePercent !== null && quote.changePercent >= 0 ? "text-green-400" : "text-red-400"}">
+                  {quote.changePercent !== null ? formatPercent(quote.changePercent) : "—"}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="mt-4 flex flex-wrap gap-6 text-sm text-[color:var(--paper-dim)] border-t border-[color:var(--ink-700)] pt-4">
+            <div><span class="font-semibold text-[color:var(--paper)]">{formatNumber(quote.previousClose, 2)}</span> Prev Close</div>
+            <div><span class="font-semibold text-[color:var(--paper)]">{formatNumber(quote.dayLow, 2)} – {formatNumber(quote.dayHigh, 2)}</span> Day Range</div>
+            <div><span class="font-semibold text-[color:var(--paper)]">{formatNumber(quote.fiftyTwoWeekLow, 2)} – {formatNumber(quote.fiftyTwoWeekHigh, 2)}</span> 52-Week Range</div>
+            <div><span class="font-semibold text-[color:var(--paper)]">{formatNumber(quote.volume)}</span> Volume</div>
+            <div><span class="font-semibold text-[color:var(--paper)]">{formatNumber(quote.marketCap)}</span> Market Cap</div>
+          </div>
+        </div>
+
+        <!-- Fundamentals Card -->
+        {fundamentals && (
+          <div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
+            <h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2 mb-5">
+              <iconify-icon icon="mdi:calculator-variant" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
+              Valuation Ratios
+            </h2>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <RatioTile
+                label="P/E (TTM)"
+                value={fundamentals.pe !== null ? fundamentals.pe.toFixed(2) : "—"}
+                source={fundamentals.peSource}
+                colorClass={ratioClass(fundamentals.pe)}
+              />
+              <RatioTile
+                label="P/S (TTM)"
+                value={fundamentals.ps !== null ? fundamentals.ps.toFixed(2) : "—"}
+                colorClass={ratioClass(fundamentals.ps)}
+              />
+              <RatioTile
+                label="PEG"
+                value={fundamentals.peg !== null ? fundamentals.peg.toFixed(2) : "—"}
+                colorClass={ratioClass(fundamentals.peg)}
+              />
+              <RatioTile
+                label="P/B"
+                value={quote.priceToBook !== null ? quote.priceToBook.toFixed(2) : "—"}
+                colorClass={ratioClass(quote.priceToBook)}
+              />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+              <StatTile label="EPS (TTM)" value={formatNumber(quote.epsTrailingTwelveMonths, 2)} />
+              <StatTile label="EPS (Fwd)" value={formatNumber(quote.epsForward, 2)} />
+              <StatTile label="Revenue (TTM)" value={formatNumber(quote.revenueTrailingTwelveMonths)} />
+              <StatTile label="Earnings Growth" value={formatPercent(quote.earningsGrowth)} />
+            </div>
+
+            {fundamentals.peSource === "computed" && (
+              <p class="mt-4 text-xs text-[color:var(--paper-muted)] italic">
+                ⚠ P/E was computed (price ÷ EPS) because Yahoo did not report a trailing PE for this ticker.
+              </p>
+            )}
+          </div>
+        )}
+
+        <!-- Placeholders for future phases -->
+        <div class="space-y-6">
+          <PhasePlaceholder title="Segment Revenue Breakdown" icon="mdi:chart-pie" description="US SEC EDGAR XBRL data — segment revenue by business line. Available when a CIK is resolved and a filing period is selected." />
+          <PhasePlaceholder title="Earnings Audit" icon="mdi:file-document-edit" description="Adjusted EPS/PE/PEG after identifying one-off items from filings. Runs after segment data is available." />
+          <PhasePlaceholder title="Peer Comparison" icon="mdi:account-group" description="Live PE/PS/PEG comparison against 3–5 sector peers. Requires live peer data fetch." />
+          <PhasePlaceholder title="Fair Value Band" icon="mdi:gauge" description="Implied price from peer-average PE × EPS, with sensitivity range. Requires peers + audit." />
+        </div>
+      </>
+    )}
+  </main>
+</body>
+</html>
+
+<script is:inline>
+  // Small inline components to keep the template tidy
+  function RatioTile({ label, value, source, colorClass }) {
+    return (
+      <div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-4">
+        <p class="text-xs text-[color:var(--paper-dim)] uppercase tracking-wider mb-1">{label}</p>
+        <p class="text-2xl font-bold {colorClass}">{value}</p>
+        {source && (
+          <p class="text-[10px] text-[color:var(--paper-muted)] mt-1 font-mono">{source}</p>
+        )}
+      </div>
+    );
+  }
+
+  function StatTile({ label, value }) {
+    return (
+      <div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-4">
+        <p class="text-xs text-[color:var(--paper-dim)] uppercase tracking-wider mb-1">{label}</p>
+        <p class="text-lg font-mono text-[color:var(--paper)]">{value}</p>
+      </div>
+    );
+  }
+
+  function PhasePlaceholder({ title, icon, description }) {
+    return (
+      <div class="bg-[color:var(--ink-850)] border border-[color:var(--ink-700)] border-dashed rounded-xl p-5">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-[color:var(--ink-900)] border border-[color:var(--ink-600)] rounded-lg">
+            <iconify-icon icon={icon} class="text-[color:var(--ink-500)] text-2xl"></iconify-icon>
+          </div>
+          <div class="flex-1">
+            <h3 class="font-semibold text-[color:var(--paper-dim)]">{title}</h3>
+            <p class="text-sm text-[color:var(--paper-muted)] mt-1">{description}</p>
+          </div>
+          <span class="flex-shrink-0 px-2 py-1 text-[10px] font-bold text-[color:var(--ink-500)] bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded">
+            Phase 2+
+          </span>
+        </div>
+      </div>
+    );
+  }
+</script>
