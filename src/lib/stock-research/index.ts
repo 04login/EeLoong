@@ -30,6 +30,7 @@ export async function lookupTicker(raw: string): Promise<StockResult> {
 }
 
 export { searchTickers } from "./sources/yahoo.ts";
+export { getSegments, type SegmentResult } from "./pipeline/segments.ts";
 export type {
   Fundamentals,
   SearchHit,

@@ -1,6 +1,13 @@
 ---
-import "../../styles/global.css";
-import { lookupTicker, type Fundamentals, type TickerQuote } from "../../../lib/stock-research/index.ts";
+import "../../../styles/global.css";
+import { env } from "cloudflare:workers";
+import {
+	lookupTicker,
+	getSegments,
+	type Fundamentals,
+	type SegmentResult,
+	type TickerQuote,
+} from "../../../lib/stock-research/index.ts";
 
 export const prerender = false;
 
@@ -9,6 +16,17 @@ if (!ticker) throw new Error("Missing ticker param");
 
 const result = await lookupTicker(ticker);
 const { quote, fundamentals, error } = result;
+
+// Phase 2 — segment revenue (US only, best-effort). Fails silently to a null
+// so the panel renders "not available" instead of erroring.
+let segments: SegmentResult | null = null;
+if (quote?.market === "US") {
+	try {
+		segments = await getSegments(env, env?.STOCK_CACHE, ticker);
+	} catch {
+		segments = null;
+	}
+}
 
 const formatNumber = (n: number | null, decimals = 2): string => {
   if (n === null || !isFinite(n)) return "—";
@@ -150,9 +168,46 @@ const ratioClass = (v: number | null): string => {
           </div>
         )}
 
+        <!-- Segment Revenue Breakdown (Phase 2) -->
+        {segments && (
+          <div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
+            <div class="flex items-center justify-between gap-4 mb-5">
+              <h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2">
+                <iconify-icon icon="mdi:chart-pie" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
+                Segment Revenue
+              </h2>
+              <span class="text-xs text-[color:var(--paper-dim)]">{segments.period} · {segments.source}</span>
+            </div>
+
+            <div class="space-y-3">
+              {segments.segments.map((s) => {
+                const max = Math.max(...segments.segments.map((x) => x.revenue));
+                const pct = max > 0 ? (s.revenue / max) * 100 : 0;
+                return (
+                  <div>
+                    <div class="flex items-center justify-between text-sm mb-1">
+                      <span class="text-[color:var(--paper)] font-medium">{s.label}</span>
+                      <span class="text-[color:var(--paper-dim)] font-mono">{formatNumber(s.revenue)}</span>
+                    </div>
+                    <div class="h-2 rounded bg-[color:var(--ink-700)] overflow-hidden">
+                      <div class="h-full rounded bg-gradient-to-r from-[color:var(--accent)] to-[color:var(--accent-light)]" style={`width:${pct}%`}></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {segments.sourceSummary && (
+              <p class="mt-4 text-xs text-[color:var(--paper-muted)] italic">Source: {segments.sourceSummary}</p>
+            )}
+          </div>
+        )}
+        {!segments && (
+          <PhasePlaceholder title="Segment Revenue Breakdown" icon="mdi:chart-pie" description="No segment revenue available for this company from SEC filings." />
+        )}
+
         <!-- Placeholders for future phases -->
         <div class="space-y-6">
-          <PhasePlaceholder title="Segment Revenue Breakdown" icon="mdi:chart-pie" description="US SEC EDGAR XBRL data — segment revenue by business line. Available when a CIK is resolved and a filing period is selected." />
           <PhasePlaceholder title="Earnings Audit" icon="mdi:file-document-edit" description="Adjusted EPS/PE/PEG after identifying one-off items from filings. Runs after segment data is available." />
           <PhasePlaceholder title="Peer Comparison" icon="mdi:account-group" description="Live PE/PS/PEG comparison against 3–5 sector peers. Requires live peer data fetch." />
           <PhasePlaceholder title="Fair Value Band" icon="mdi:gauge" description="Implied price from peer-average PE × EPS, with sensitivity range. Requires peers + audit." />
