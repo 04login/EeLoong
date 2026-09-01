@@ -1,11 +1,12 @@
 ---
 import "../../../styles/global.css";
+import { env } from "cloudflare:workers";
 
 // Ensure this is SSR
 export const prerender = false;
 
 // We need DB access
-let db = Astro.locals?.runtime?.env?.DB;
+let db = env?.DB || (Astro.locals as any)?.runtime?.env?.DB;
 
 let successMessage = "";
 let errorMessage = "";
@@ -42,9 +43,9 @@ if (Astro.request.method === "POST" && db) {
     } else if (action === "delete") {
       const search_id = data.get("search_id");
       if (search_id) {
-                await db.prepare(
-                    `DELETE FROM monitored_searches WHERE search_id = ?`
-                ).bind(search_id).run();
+        await db.prepare(
+          `DELETE FROM monitored_searches WHERE search_id = ?`
+        ).bind(search_id).run();
         successMessage = "Search deleted successfully.";
       }
     }
@@ -54,13 +55,18 @@ if (Astro.request.method === "POST" && db) {
   }
 }
 
-let searches = [];
+let searches: any[] = [];
 if (db) {
-  const result = await db.prepare(
-    `SELECT search_id, name, query, min_price, max_price, is_active, exclude_bumped FROM monitored_searches ORDER BY created_at DESC`
-  ).all();
-  if (result.results) {
-    searches = result.results;
+  try {
+    const result = await db.prepare(
+      `SELECT search_id, name, query, min_price, max_price, is_active, exclude_bumped FROM monitored_searches ORDER BY created_at DESC`
+    ).all();
+    if (result && result.results) {
+      searches = result.results;
+    }
+  } catch (dbErr: any) {
+    console.error("D1 searches fetch error:", dbErr);
+    errorMessage = errorMessage || `Database error: ${dbErr?.message || "Failed to query database."}`;
   }
 }
 
@@ -200,9 +206,9 @@ if (!db && import.meta.env.DEV) {
                                                     <div class="inline-flex flex-col items-center bg-[color:var(--ink-900)] rounded-md border border-[color:var(--ink-700)] px-3 py-1">
                                                         <span class="text-xs text-[color:var(--paper-dim)] font-semibold uppercase tracking-wider mb-0.5">Range</span>
                                                         <span class="text-sm font-mono whitespace-nowrap text-[color:var(--paper)] flex items-center gap-1.5">
-                                                            S${search.min_price?.toFixed(2) || "0.00"}
+                                                            S${search.min_price !== null && search.min_price !== undefined ? Number(search.min_price).toFixed(2) : "0.00"}
                                                             <iconify-icon icon="mdi:arrow-right-thin" class="text-[color:var(--paper-muted)]"></iconify-icon>
-                                                            {search.max_price ? `S$${search.max_price.toFixed(2)}` : "Max"}
+                                                            {search.max_price !== null && search.max_price !== undefined ? `S$${Number(search.max_price).toFixed(2)}` : "Max"}
                                                         </span>
                                                     </div>
                                                 </td>
