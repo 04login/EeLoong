@@ -1,0 +1,23 @@
+---
+// Dashed "not available / coming later" panel for sections with no data.
+interface Props {
+	title: string;
+	icon: string;
+	description: string;
+	badge?: string;
+}
+const { title, icon, description, badge = "Phase 2+" } = Astro.props;
+---
+
+<div class="bg-[color:var(--ink-850)] border border-[color:var(--ink-700)] border-dashed rounded-xl p-5">
+	<div class="flex items-start gap-3">
+		<div class="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-[color:var(--ink-900)] border border-[color:var(--ink-600)] rounded-lg">
+			<iconify-icon icon={icon} class="text-[color:var(--ink-500)] text-2xl"></iconify-icon>
+		</div>
+		<div class="flex-1">
+			<h3 class="font-semibold text-[color:var(--paper-dim)]">{title}</h3>
+			<p class="text-sm text-[color:var(--paper-muted)] mt-1">{description}</p>
+		</div>
+		<span class="flex-shrink-0 px-2 py-1 text-[10px] font-bold text-[color:var(--ink-500)] bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded">{badge}</span>
+	</div>
+</div>

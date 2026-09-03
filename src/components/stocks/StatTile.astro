@@ -1,0 +1,13 @@
+---
+// Plain stat tile (EPS, revenue, growth…) for the stock result page.
+interface Props {
+	label: string;
+	value: string;
+}
+const { label, value } = Astro.props;
+---
+
+<div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-4">
+	<p class="text-xs text-[color:var(--paper-dim)] uppercase tracking-wider mb-1">{label}</p>
+	<p class="text-lg font-mono text-[color:var(--paper)]">{value}</p>
+</div>

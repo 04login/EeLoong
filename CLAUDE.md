@@ -5,9 +5,10 @@ Personal portfolio site (Astro + Tailwind CSS 4, deployed to Cloudflare Workers 
 ## What this project is
 
 - **Personal portfolio** for Ee Loong Low (graphics/software engineer). Main page: [src/pages/index.astro](src/pages/index.astro), content data in [src/data/profile.ts](src/data/profile.ts).
-- **Two live tools**, both under `/projects/*`:
+- **Three tools**, all under `/projects/*`:
   - **CarousellScraper / Deal Monitor** — `/projects/carousell-bot` (+ `/projects/carousell-bot/searches`). Python scraper outside this repo; this repo hosts the Astro dashboard reading Cloudflare D1. Uses **LiteLLM** (Gemini → Groq → Qwen with fallback) for LLM calls.
-  - **Valuation Desk** — `/projects/valuation` (`src/pages/projects/valuation.astro`). Standalone DCF workbench, vanilla JS + Chart.js + FMP API, with its own hand-rolled CSS. **Being replaced** by the new stock-research tool (see below).
+  - **Stock Research** — `/projects/stocks` (`src/pages/projects/stocks/`). On-demand PE/P/S/PEG, segment revenue, earnings audit, peer comparison, fair-value band. **Implemented (all 4 code phases), `npm run build` passes, works in local dev — not yet deployed** (STOCK_CACHE KV IDs are placeholders; see below).
+  - **Valuation Desk** — `/projects/valuation` (`src/pages/projects/valuation.astro`). Standalone DCF workbench, vanilla JS + Chart.js + FMP API, with its own hand-rolled CSS. **Slated for deletion** — Stock Research replaces it; the swap (delete page + repoint `profile.ts` entry #6) is the one remaining code step.
 - Remaining pages are static portfolio content.
 
 ## Tech stack (pin versions to conversion with user before bumping)
@@ -34,61 +35,66 @@ Personal portfolio site (Astro + Tailwind CSS 4, deployed to Cloudflare Workers 
 
 - Name `eeloong`, `compatibility_date = 2026-04-26`, `nodejs_compat` flag.
 - **D1** `DB` = carousell-bot database (binding `DB`, real database_id present).
-- **KV** `STOCK_CACHE` binding declared but **IDs are placeholders** (`your-kv-namespace-id-here`). **Local dev works** (Miniflare local KV under `.wrangler/`), but **the first remote `wrangler deploy` will fail** until real IDs are created via `npx wrangler kv namespace create STOCK_CACHE` and pasted into `wrangler.toml`.
+- **KV** `STOCK_CACHE` binding declared but **IDs are placeholders** (`your-kv-namespace-id-here`). **Local dev works** (Miniflare local KV under `.wrangler/`), but **the first remote `wrangler deploy` will fail** until real IDs are created via `npx wrangler kv namespace create STOCK_CACHE` and pasted into `wrangler.toml`. The stocks tool needs it at runtime (CIK map + segments/audit cache) — nothing on that page's remote path works until this is done.
 - `.wrangler/state/` is Miniflare local state — commit noise, not real.
 
-## Stock Research Tool — approved implementation plan
+## Stock Research Tool — implemented (Phases 1–4)
 
-Decision status: **approved for implementation with user decisions baked in.**
+Status: **all code phases implemented; `npm run build` passes; works in local dev; not yet deployed.** The plan doc (`stock-research-implementation-plan.md`) is historical — where reality differs, this file wins (most notably: EDGAR `companyfacts` was the wrong source — see below).
 
 ### What it is
-On-demand, any-ticker research tool replacing Valuation Desk: PE/P/S/PEG from live Yahoo data, segment revenue breakdown (SEC EDGAR XBRL companyfacts, US only), earnings audit (one-off items via LLM), peer comparison, fair-value band. No accounts, no stored universe. Live data fetched per request; only slow-changing filing-derived data is cached (KV).
+On-demand, any-ticker research tool (built to replace Valuation Desk): PE/P/S/PEG from live Yahoo data, segment revenue breakdown (US only), earnings audit (one-off items via LLM), peer comparison, fair-value band. No accounts, no stored universe. Live data fetched per request; only slow-changing filing-derived data is cached (KV).
 
-### Rev 3 file layout
+### File layout (actual)
 ```
 src/pages/projects/stocks/
-  index.astro          # search/landing
-  [ticker].astro       # result page (on-demand via existing SSR — NO prerender=false needed)
+  index.astro          # search/landing — export const prerender = false
+  [ticker].astro       # result page — export const prerender = false
 src/lib/stock-research/
   types.ts  config.ts  index.ts
   sources/  yahoo.ts  edgar.ts  cik-map.ts
   pipeline/ fundamentals.ts  segments.ts  earnings-audit.ts  peer-comparison.ts  fair-value.ts
   llm/      client.ts   prompts.ts
   cache/    kv.ts
-src/components/stocks/*.astro   # Tailwind ink/paper/accent; match carousell-bot's design language
+src/components/stocks/
+  RatioTile.astro  StatTile.astro  PhasePlaceholder.astro
+  # The plan's five named components (FundamentalsCard, SegmentChart, …) were
+  # consolidated into these three; section panels render inline in [ticker].astro.
 ```
+Both pages carry `export const prerender = false` — explicit but redundant (`output: "server"` is already on-demand). The lib stays portable: nothing touches `locals.runtime`; `[ticker].astro` passes `env.STOCK_CACHE` (from `cloudflare:workers`) into the pipeline. No `/api/stocks/[ticker].ts` endpoint — the SSR page is the API.
 
-Why this is correct here:
-- SSR + `output: "server"` already on (no config change). Plan doc's original `prerender = false` + `platformProxy` + `Astro.locals.runtime.env` recommendations are obsolete for this repo's installed adapter versions.
-- `env.d.ts` already types `STOCK_CACHE`; `wrangler.toml` already declares it.
-- No `/api/stocks/[ticker].ts` endpoint for v1 — the SSR page is the API; add only if client-side partial refresh is later needed.
+### Implementation facts (learned in the build — don't re-derive)
+- **EDGAR `companyfacts` / `companyconcept` strip ALL dimensional (segment) data** — zero `segment:` keys even for AAPL/MSFT/KO, so the plan's stated source was wrong. Segment extraction instead works directly off the **raw 10-K XBRL instance XML** (`edgar.ts`: parse `<context>` blocks for segment/product members + numeric revenue facts), with a fallback to the **rendered HTML note** (find the segment/revenue `R*.htm` via `FilingSummary.xml`, extract `<table>`s) for large filers like Apple that only tag the aggregate. The LLM normalizes both paths; it never invents numbers.
+- **Yahoo**: `v8/finance/chart` + `v1/finance/search` are keyless. `v10/finance/quoteSummary` is **crumb-gated**: grab the A3 cookie from `fc.yahoo.com` (404 is expected — the Set-Cookie matters), trade it at `v1/test/getcrumb`, send `&crumb=` on the quoteSummary call, with one 401 retry. `fetchQuote` merges chart meta + quoteSummary.
+- **LLM client** (`llm/client.ts`): plain-fetch rotation **Gemini → Groq → OpenRouter**, hard 10 s timeout, Gemini `responseMimeType: application/json`, temperature 0. Models: `gemini-2.5-flash` (primary), `llama-3.3-70b-versatile` (Groq), `qwen/qwen-2.5-72b-instruct` (OpenRouter). Missing key → provider skipped; all providers fail → throw, callers render "unavailable".
+- **Cache** (`cache/kv.ts`): keys prefixed `stock-research:`. Actual keys: `ticker-cik-map` (2-week TTL), `segments:{ticker}:{fyEnd}` / `audit:{ticker}:{fyEnd}` (90-day TTL) where `fyEnd` is the 10-K `reportDate`. Cached value is the **filtered/normalized** payload, never raw multi-MB filings.
+- **Market gating**: `quote.market` derives from ticker suffix (`.SI` = SGP, else US). Segments + audit run only for US (needs a CIK); SGX/HK tickers get fundamentals + (if curated) peers. Every section degrades to an explicit "not available for this company" placeholder — no thrown page errors.
+- **Peers / fair value**: hand-curated `PEER_GROUPS` in `config.ts` (incl. SGX banks `D05.SI`/`O39.SI`/`U11.SI`); only tickers in a group get the panels. Fair value = peer-average PE × EPS ± 20% band. Gotcha: SGX tickers as object keys **must be quoted** (`"D05.SI": […]`) — unquoted dots broke the build.
 
-### LLM provider decision
-**LiteLLM provider rotation** — matched to the carousell bot (Gemini → Groq → Qwen with graceful fallback), NOT the Anthropic API. So:
-- LiteLLM has **no node/worker package** — implement provider rotation directly in `src/lib/stock-research/llm/client.ts` with plain `fetch` calls, same provider order/fallback pattern as the carousell bot:
-  - Gemini (primary): `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` (works on Workers with plain fetch)
-  - Groq (fallback 1): `https://api.groq.com/openai/v1/chat/completions`
-  - OpenRouter/Qwen (fallback 2): `https://openrouter.ai/api/v1/chat/completions` (OpenAI-compatible)
-- Keys as Worker secrets, mirroring carousell `.env` usage: `GEMINI_API_KEY` (+ optional `GROQ_API_KEY`, `OPENROUTER_API_KEY`). Local dev via `.dev.vars`.
-- Model quality floor: **Gemini Flash tier at minimum** for segment grouping / one-off classification — not the cheapest Groq tier.
-- LLM step shape: ONE structured-output call (Gemini `responseMimeType: application/json`, no tools), hard ~10s timeout, render panel as "unavailable" on failure rather than hanging the page. LLM runs only on first view of a (ticker, filing-period) combo — KV-cached afterwards.
-- SEC compliance: descriptive User-Agent header with real contact info required by EDGAR.
+### LLM provider decision (why)
+**LiteLLM provider rotation** — matched to the carousell bot (Gemini → Groq → Qwen with graceful fallback), NOT the Anthropic API:
+- LiteLLM has **no node/worker package** — implemented directly in `llm/client.ts` with plain `fetch` (Gemini generated-content API; Groq + OpenRouter are OpenAI-compatible `chat/completions`).
+- Keys as Worker secrets: `GEMINI_API_KEY` (primary), optional `GROQ_API_KEY`, `OPENROUTER_API_KEY`. Local dev via `.dev.vars`.
+- Model floor: **Gemini Flash tier minimum** for segment grouping / one-off classification — not the cheapest Groq tier.
+- LLM step shape: ONE structured-output call, hard ~10 s timeout, panel renders "unavailable" on failure. LLM runs only on first view of a (ticker, filing-period) combo — KV-cached afterwards.
+- SEC compliance: descriptive User-Agent with real contact on every EDGAR request (`SEC_USER_AGENT` in `config.ts`).
 
-### UI requirement
-Stock tool UI must use the site Tailwind design system (ink/paper/accent). Do NOT reuse valuation.astro styles.
+### UI requirement (met)
+Stock tool UI uses the site Tailwind design system (ink/paper/accent) via `RatioTile`/`StatTile`/`PhasePlaceholder` + inline panels in `[ticker].astro`. **Do not** reuse valuation.astro styles.
 
-### BUILD ORDER (phases additive; commit after each)
-1. **Phase 1 — Core**: `sources/yahoo.ts`, `sources/cik-map.ts`, `pipeline/fundamentals.ts`, `config.ts`, `types.ts`, `index.ts`; pages `index.astro` + `[ticker].astro`. Output: live PE/P/S/PEG end-to-end, any ticker.
-2. **Replace Valuation Desk**: delete `src/pages/projects/valuation.astro`, update entry #6 in `src/data/profile.ts` (title/desc/technologies/link → `/projects/stocks`).
-3. **Phase 2 — Segments (US)**: `sources/edgar.ts`, `pipeline/segments.ts`, `llm/client.ts` + `llm/prompts.ts`, `cache/kv.ts`. Set secrets + real KV IDs.
-4. **Phase 3 — Earnings audit**: `pipeline/earnings-audit.ts` (reuses `llm/`).
-5. **Phase 4 — Peer comparison + fair value**: `pipeline/peer-comparison.ts`, `pipeline/fair-value.ts`.
-6. **Phase 5 (later)**: SG (`.SI`) segment support via annual-report PDF extraction — same filter→LLM→cache shape as EDGAR, different source (SGXNet/company PDFs, no public structured API).
+### Remaining work
+1. **Replace Valuation Desk** (plan's step 2, still open): delete `src/pages/projects/valuation.astro`; update `src/data/profile.ts` entry #6 (title/description/technologies/link → `/projects/stocks`).
+2. **Deploy prep**: real KV IDs (`npx wrangler kv namespace create STOCK_CACHE`) → `wrangler.toml`; set Worker secrets `GEMINI_API_KEY` (+ optional `GROQ_API_KEY`, `OPENROUTER_API_KEY`).
+3. **Phase 5 (future)**: SG (`.SI`) segment support via annual-report PDF extraction — same filter → LLM → cache shape as EDGAR, different source (SGXNet / company PDFs, no public structured API).
 
-### Key ordering / notes from the plan doc (valid, keep)
-- Request pipeline: detect market from ticker suffix (`.SI` = SGX, else US) → parallel fetch with `Promise.allSettled` (each subrequest independent; ~6-9 subrequests well under the 50/request Workers limit) → compute fundamentals (PE/PS/PEG) → for US: segments + audit from EDGAR (KV-cached `segments:{ticker}:{period}`, `audit:{ticker}:{period}`, months TTL) → peers live → fair-value formula (peer-average PE × EPS = implied price). Graceful "not available for this company" per section.
-- Cache keys: `ticker-cik-map` (weeks), `segments:{ticker}:{period}` / `audit:{ticker}:{period}` (months), optional `quote:{ticker}` (minutes). Cache the **filtered** facts payload, never raw multi-MB companyfacts.
-- Code-first filter pass on EDGAR facts (segment-axis tags / one-off indicators), LLM only groups/labels/normalizes — never invents or computes numbers.
+### Pipeline order (`[ticker].astro`, per request)
+1. Detect market from ticker suffix (`.SI` = SGX; else US).
+2. `lookupTicker` → Yahoo quote + fundamentals (PE/P/S/PEG, all best-effort).
+3. US only: `getSegments` then `getEarningsAudit` — each: resolve CIK → latest 10-K → KV check → EDGAR extract → LLM normalize → cache.
+4. `getPeerComparison` (live, `Promise.allSettled` per peer) if `PEER_GROUPS[ticker]`.
+5. `computeFairValue` (peer-avg PE × EPS ± 20%) when inputs are positive.
+
+Code-first filter pass on EDGAR facts (segment-axis tags / one-off indicators); LLM only groups/labels/normalizes — never invents or computes numbers. All sections fail soft; nothing hangs the page.
 
 ## Git / repo logistics
 
@@ -97,5 +103,6 @@ Stock tool UI must use the site Tailwind design system (ink/paper/accent). Do NO
 - Watch `.wrangler/state/` and other Miniflare state when committing — it churns (sqlite-shm/wal, kv/, images/, observability/).
 
 ## Secrets (never commit)
+
 - Carousell: `DB` D1 + LiteLLM keys (project side).
-- Stock tool (planned): `GEMINI_API_KEY` (primary), optional `GROQ_API_KEY`, `OPENROUTER_API_KEY`, SEC User-Agent string.
+- Stock tool: LLM keys `GEMINI_API_KEY` (primary), optional `GROQ_API_KEY`, `OPENROUTER_API_KEY` — present in `.dev.vars` for local dev; must be set as Cloudflare Worker secrets before first remote deploy. SEC `User-Agent` lives in `config.ts` (`SEC_USER_AGENT`), not as a secret.

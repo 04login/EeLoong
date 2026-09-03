@@ -26,6 +26,50 @@ export const CACHE_TTL = {
 export const PB_LOW_THRESHOLD = 1;
 export const PB_HIGH_THRESHOLD = 3;
 
+// Hand-curated peer sets for the peer-comparison / fair-value phases. Yahoo's
+// keyless endpoints expose no "similar companies" list, so we map the handful
+// of well-known tickers into representative same-sector groups. Tickers not in
+// a group get no peer panel (honest "not available" rather than invented
+// peers). Keys are the PRIMARY ticker; the array is its comparison set.
+export const PEER_GROUPS: Record<string, string[]> = {
+  AAPL: ["MSFT", "GOOGL", "META", "HPQ"],
+  MSFT: ["AAPL", "GOOGL", "ORCL", "CRM"],
+  GOOGL: ["MSFT", "META", "AAPL"],
+  META: ["GOOGL", "SNAP", "PINS"],
+  AMZN: ["WMT", "BABA", "EBAY"],
+  NVDA: ["AMD", "INTC", "AVGO", "QCOM"],
+  AMD: ["NVDA", "INTC", "QCOM"],
+  INTC: ["AMD", "NVDA", "QCOM"],
+  AVGO: ["NVDA", "QCOM", "TXN"],
+  QCOM: ["AVGO", "INTC", "TXN"],
+  TSLA: ["GM", "F", "RIVN"],
+  JPM: ["BAC", "WFC", "C"],
+  BAC: ["JPM", "WFC", "C"],
+  WFC: ["JPM", "BAC", "C"],
+  V: ["MA", "PYPL"],
+  MA: ["V", "PYPL"],
+  JNJ: ["PFE", "MRK", "ABBV"],
+  PFE: ["JNJ", "MRK", "ABBV"],
+  MRK: ["JNJ", "PFE", "ABBV"],
+  XOM: ["CVX", "COP", "SHEL"],
+  CVX: ["XOM", "COP", "SHEL"],
+  KO: ["PEP", "MNST"],
+  PEP: ["KO", "MNST"],
+  WMT: ["COST", "TGT", "AMZN"],
+  COST: ["WMT", "TGT"],
+  HD: ["LOW", "TGT"],
+  MCD: ["SBUX", "CMG", "YUM"],
+  NFLX: ["DIS", "WBD"],
+  DIS: ["NFLX", "WBD", "PARA"],
+  CRM: ["ORCL", "SAP", "NOW"],
+  ORCL: ["CRM", "SAP", "NOW"],
+  SAP: ["CRM", "ORCL"],
+  "0700.HK": ["TCEHY", "BABA"],
+  "D05.SI": ["O39.SI", "U11.SI"],
+  "O39.SI": ["D05.SI", "U11.SI"],
+  "U11.SI": ["D05.SI", "O39.SI"],
+};
+
 // A small static fallback used when Yahoo search is down (Phase 1 has no KV/LLM
 // dependencies, but search results still shouldn't hard-fail the landing page).
 export const FALLBACK_SEARCH_RESULTS: SearchHit[] = [

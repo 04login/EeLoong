@@ -134,15 +134,17 @@ export function parseXbrlContexts(xml: string): Map<string, { members: XbrlMembe
   return map;
 }
 
-export function parseXbrlNumericFacts(xml: string): XbrlRevenueFact[] {
+export function parseXbrlNumericFacts(xml: string, tagFilter?: RegExp): XbrlRevenueFact[] {
   // Matches `<prefix:Tag contextRef="...">123</prefix:Tag>` numeric facts.
+  // Without a tagFilter, only revenue-ish tags are kept (segment pipeline);
+  // with one, the caller picks its own tag family (one-off audit).
   const facts: XbrlRevenueFact[] = [];
   const re = /<([A-Za-z0-9_]+):([A-Za-z0-9_]+)\b[^>]*contextRef="([^"]+)"[^>]*>(-?[0-9]+(?:\.[0-9]+)?)<\/[A-Za-z0-9_]+:[A-Za-z0-9_]+>/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(xml))) {
     const tag = m[2];
     const val = Number(m[4]);
-    if (Number.isFinite(val) && /revenue|sales|turnover/i.test(tag)) {
+    if (Number.isFinite(val) && (tagFilter ? tagFilter.test(tag) : /revenue|sales|turnover/i.test(tag))) {
       facts.push({ tag: tag.replace(/^Net/, ""), value: val, contextRef: m[3] });
     }
   }
@@ -206,6 +208,46 @@ export async function fetchXbrlSegmentRows(
   const ctxs = parseXbrlContexts(xml);
   const facts = parseXbrlNumericFacts(xml);
   return xbrlSegmentsToRows(ctxs, facts);
+}
+
+// ---- One-off / unusual items (earnings audit) ----
+
+// Tag names whose names alone suggest a non-recurring item. Deliberately broad
+// — the LLM decides which are genuinely one-off; we only pre-filter noise.
+export const ONE_OFF_TAG_RE =
+  /restructuring|impair|write.?down|writedown|goodwill|discontinu|litigation|settlement|severance|exit|disposal|gainloss|gain.?loss|unusual|nonrecurring|non.?recurring|casualty|environmental|legal/i;
+
+// Latest-annual-period consolidated (no dimension) facts matching the filter.
+// Returns raw rows for the audit pipeline — nothing computed here.
+export async function fetchXbrlOneOffFacts(
+  filing: Latest10K,
+): Promise<{ period: string; rows: { label: string; value: number }[] } | null> {
+  const xmlPath = await instanceDocName(filing.acc, Number(filing.cik), filing.primaryDoc);
+  if (!xmlPath) return null;
+  const xml = await fetchSecArchive(`${filing.cik}/${filing.acc}/${xmlPath}`).catch(() => "");
+  if (!xml || xml.length < 1000) return null;
+
+  const ctxs = parseXbrlContexts(xml);
+  const facts = parseXbrlNumericFacts(xml, ONE_OFF_TAG_RE);
+
+  // Keep only consolidated facts (no segment member) in the latest annual
+  // period. Dimensional contexts here are segment-level restatements of the
+  // same item — the audit cares about the company-wide impact.
+  const fyEnd = filing.fyEnd;
+  const byLabel = new Map<string, { value: number; period: string }>();
+  for (const f of facts) {
+    const ctx = ctxs.get(f.contextRef);
+    if (!ctx || ctx.members.length > 0) continue;
+    if (fyEnd && ctx.endDate && ctx.endDate !== fyEnd) continue;
+    const existing = byLabel.get(f.tag);
+    if (!existing || Math.abs(f.value) > Math.abs(existing.value)) {
+      byLabel.set(f.tag, { value: f.value, period: ctx.endDate || fyEnd });
+    }
+  }
+  if (byLabel.size === 0) return null;
+
+  const rows = [...byLabel.entries()].map(([label, v]) => ({ label, value: v.value }));
+  return { period: fyEnd || [...byLabel.values()][0].period, rows };
 }
 
 // ---- HTML fallback: rendered financial statements ----

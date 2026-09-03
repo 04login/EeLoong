@@ -1,0 +1,16 @@
+---
+// Valuation ratio tile (P/E, P/S, PEG, P/B) for the stock result page.
+interface Props {
+	label: string;
+	value: string;
+	source?: string | null;
+	colorClass?: string;
+}
+const { label, value, source = null, colorClass = "" } = Astro.props;
+---
+
+<div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-4">
+	<p class="text-xs text-[color:var(--paper-dim)] uppercase tracking-wider mb-1">{label}</p>
+	<p class="text-2xl font-bold {colorClass}">{value}</p>
+	{source && <p class="text-[10px] text-[color:var(--paper-muted)] mt-1 font-mono">{source}</p>}
+</div>

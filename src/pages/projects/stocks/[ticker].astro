@@ -1,12 +1,22 @@
 ---
 import "../../../styles/global.css";
 import { env } from "cloudflare:workers";
+import RatioTile from "../../../components/stocks/RatioTile.astro";
+import StatTile from "../../../components/stocks/StatTile.astro";
+import PhasePlaceholder from "../../../components/stocks/PhasePlaceholder.astro";
 import {
 	lookupTicker,
 	getSegments,
+	getEarningsAudit,
+	getPeerComparison,
+	computeFairValue,
+	PEER_GROUPS,
 	type Fundamentals,
 	type SegmentResult,
 	type TickerQuote,
+	type AuditResult,
+	type PeerComparison,
+	type FairValue,
 } from "../../../lib/stock-research/index.ts";
 
 export const prerender = false;
@@ -28,235 +38,384 @@ if (quote?.market === "US") {
 	}
 }
 
+// Phase 3 — earnings audit (US only, same failure posture).
+let audit: AuditResult | null = null;
+if (quote?.market === "US") {
+	try {
+		audit = await getEarningsAudit(env, env?.STOCK_CACHE, ticker, quote);
+	} catch {
+		audit = null;
+	}
+}
+
+// Phase 4 — peers + fair value (live, no cache). Only tickers with a curated
+// peer set in config get these panels.
+let peers: PeerComparison | null = null;
+let fairValue: FairValue | null = null;
+if (quote) {
+	const peerSet = PEER_GROUPS[quote.symbol];
+	if (peerSet) {
+		try {
+			peers = await getPeerComparison(quote.symbol, peerSet);
+		} catch {
+			peers = null;
+		}
+		if (peers) {
+			fairValue = await computeFairValue(quote.symbol, peers, quote.epsTrailingTwelveMonths, quote.price);
+		}
+	}
+}
+
 const formatNumber = (n: number | null, decimals = 2): string => {
-  if (n === null || !isFinite(n)) return "—";
-  if (Math.abs(n) >= 1e12) return `${(n / 1e12).toFixed(decimals)}T`;
-  if (Math.abs(n) >= 1e9) return `${(n / 1e9).toFixed(decimals)}B`;
-  if (Math.abs(n) >= 1e6) return `${(n / 1e6).toFixed(decimals)}M`;
-  if (Math.abs(n) >= 1e3) return `${(n / 1e3).toFixed(decimals)}K`;
-  return n.toFixed(decimals);
+	if (n === null || !isFinite(n)) return "—";
+	if (Math.abs(n) >= 1e12) return `${(n / 1e12).toFixed(decimals)}T`;
+	if (Math.abs(n) >= 1e9) return `${(n / 1e9).toFixed(decimals)}B`;
+	if (Math.abs(n) >= 1e6) return `${(n / 1e6).toFixed(decimals)}M`;
+	if (Math.abs(n) >= 1e3) return `${(n / 1e3).toFixed(decimals)}K`;
+	return n.toFixed(decimals);
 };
 
 const formatPercent = (n: number | null): string => {
-  if (n === null || !isFinite(n)) return "—";
-  const sign = n > 0 ? "+" : "";
-  return `${sign}${(n * 100).toFixed(2)}%`;
+	if (n === null || !isFinite(n)) return "—";
+	const sign = n > 0 ? "+" : "";
+	return `${sign}${(n * 100).toFixed(2)}%`;
 };
 
 const ratioClass = (v: number | null): string => {
-  if (v === null) return "text-[color:var(--paper-muted)]";
-  if (v < 10) return "text-green-400";
-  if (v < 20) return "text-yellow-300";
-  return "text-red-400";
+	if (v === null) return "text-[color:var(--paper-muted)]";
+	if (v < 10) return "text-green-400";
+	if (v < 20) return "text-yellow-300";
+	return "text-red-400";
 };
+
+const cur = (c: string | null): string => (c === "USD" ? "$" : c === "SGD" ? "S$" : "");
 ---
 
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <meta name="viewport" content="width=device-width" />
-  <title>{quote?.shortName ?? ticker.toUpperCase()} — Stock Research</title>
-  <script is:inline type="module" src="https://cdn.jsdelivr.net/npm/iconify-icon@1/dist/iconify-icon.min.js"></script>
+	<meta charset="utf-8" />
+	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+	<meta name="viewport" content="width=device-width" />
+	<title>{quote?.shortName ?? ticker.toUpperCase()} — Stock Research</title>
+	<script is:inline type="module" src="https://cdn.jsdelivr.net/npm/iconify-icon@1/dist/iconify-icon.min.js"></script>
 </head>
 <body class="min-h-screen bg-[color:var(--ink-900)] text-[color:var(--paper)]">
-  <main class="w-full max-w-[96%] xl:max-w-[900px] mx-auto pb-12 pt-4 md:pt-8 md:px-8">
-    <!-- Header -->
-    <div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-      <div>
-        <h1 class="text-3xl font-bold text-[color:var(--paper)] flex items-center gap-3">
-          <iconify-icon icon="mdi:chart-line" class="text-[color:var(--accent)] text-4xl"></iconify-icon>
-          {quote?.shortName ?? ticker.toUpperCase()}
-        </h1>
-        <p class="text-[color:var(--paper-dim)] ml-11 text-sm">
-          {quote?.longName ?? "—"} · {quote?.exchange ?? "—"} · {quote?.market ?? "—"}
-        </p>
-      </div>
-      <a href="/projects/stocks" class="flex gap-2 items-center px-4 py-2 border border-[color:var(--ink-600)] bg-[color:var(--ink-850)] hover:bg-[color:var(--ink-800)] hover:border-[color:var(--accent)] rounded-lg text-sm transition font-semibold shadow-sm">
-        <iconify-icon icon="mdi:arrow-left" class="text-lg text-[color:var(--accent)]"></iconify-icon>
-        Back to Search
-      </a>
-    </div>
+	<main class="w-full max-w-[96%] xl:max-w-[900px] mx-auto pb-12 pt-4 md:pt-8 md:px-8">
+		<!-- Header -->
+		<div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+			<div>
+				<h1 class="text-3xl font-bold text-[color:var(--paper)] flex items-center gap-3">
+					<iconify-icon icon="mdi:chart-line" class="text-[color:var(--accent)] text-4xl"></iconify-icon>
+					{quote?.shortName ?? ticker.toUpperCase()}
+				</h1>
+				<p class="text-[color:var(--paper-dim)] ml-11 text-sm">
+					{quote?.longName ?? "—"} · {quote?.exchange ?? "—"} · {quote?.market ?? "—"}
+				</p>
+			</div>
+			<a href="/projects/stocks" class="flex gap-2 items-center px-4 py-2 border border-[color:var(--ink-600)] bg-[color:var(--ink-850)] hover:bg-[color:var(--ink-800)] hover:border-[color:var(--accent)] rounded-lg text-sm transition font-semibold shadow-sm">
+				<iconify-icon icon="mdi:arrow-left" class="text-lg text-[color:var(--accent)]"></iconify-icon>
+				Back to Search
+			</a>
+		</div>
 
-    {error && (
-      <div class="mb-6 p-4 bg-[color:var(--ink-850)] border border-[color:var(--accent)]/30 rounded-lg text-[color:var(--accent)]">
-        <strong>Could not load data for {ticker.toUpperCase()}.</strong>
-        <p class="text-sm mt-1">Yahoo Finance may be blocking this region, the ticker may not exist, or the endpoint changed. Try again later.</p>
-      </div>
-    )}
+		{error && (
+			<div class="mb-6 p-4 bg-[color:var(--ink-850)] border border-[color:var(--accent)]/30 rounded-lg text-[color:var(--accent)]">
+				<strong>Could not load data for {ticker.toUpperCase()}.</strong>
+				<p class="text-sm mt-1">Yahoo Finance may be blocking this region, the ticker may not exist, or the endpoint changed. Try again later.</p>
+			</div>
+		)}
 
-    {!error && quote && (
-      <>
-        <!-- Price Header -->
-        <div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
-          <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div>
-              <p class="text-[color:var(--paper-dim)] text-xs font-semibold uppercase tracking-wider mb-1">Price</p>
-              <p class="text-4xl font-bold text-[color:var(--paper)]">
-                {quote.currency === "USD" ? "$" : quote.currency === "SGD" ? "S$" : ""}
-                {formatNumber(quote.price, 2)}
-              </p>
-            </div>
-            <div class="flex items-end gap-4 text-right md:text-left">
-              <div>
-                <p class="text-[color:var(--paper-dim)] text-xs font-semibold uppercase tracking-wider mb-1">Change</p>
-                <p class="text-lg font-semibold {quote.change !== null && quote.change >= 0 ? "text-green-400" : "text-red-400"}">
-                  {quote.change !== null ? (quote.change >= 0 ? "+" : "") + formatNumber(quote.change, 2) : "—"}
-                </p>
-              </div>
-              <div>
-                <p class="text-[color:var(--paper-dim)] text-xs font-semibold uppercase tracking-wider mb-1">Change %</p>
-                <p class="text-lg font-semibold {quote.changePercent !== null && quote.changePercent >= 0 ? "text-green-400" : "text-red-400"}">
-                  {quote.changePercent !== null ? formatPercent(quote.changePercent) : "—"}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div class="mt-4 flex flex-wrap gap-6 text-sm text-[color:var(--paper-dim)] border-t border-[color:var(--ink-700)] pt-4">
-            <div><span class="font-semibold text-[color:var(--paper)]">{formatNumber(quote.previousClose, 2)}</span> Prev Close</div>
-            <div><span class="font-semibold text-[color:var(--paper)]">{formatNumber(quote.dayLow, 2)} – {formatNumber(quote.dayHigh, 2)}</span> Day Range</div>
-            <div><span class="font-semibold text-[color:var(--paper)]">{formatNumber(quote.fiftyTwoWeekLow, 2)} – {formatNumber(quote.fiftyTwoWeekHigh, 2)}</span> 52-Week Range</div>
-            <div><span class="font-semibold text-[color:var(--paper)]">{formatNumber(quote.volume)}</span> Volume</div>
-            <div><span class="font-semibold text-[color:var(--paper)]">{formatNumber(quote.marketCap)}</span> Market Cap</div>
-          </div>
-        </div>
+		{!error && quote && (
+			<>
+				<!-- Price Header -->
+				<div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
+					<div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+						<div>
+							<p class="text-[color:var(--paper-dim)] text-xs font-semibold uppercase tracking-wider mb-1">Price</p>
+							<p class="text-4xl font-bold text-[color:var(--paper)]">
+								{cur(quote.currency)}{formatNumber(quote.price, 2)}
+							</p>
+						</div>
+						<div class="flex items-end gap-4 text-right md:text-left">
+							<div>
+								<p class="text-[color:var(--paper-dim)] text-xs font-semibold uppercase tracking-wider mb-1">Change</p>
+								<p class={`text-lg font-semibold ${quote.change !== null && quote.change >= 0 ? "text-green-400" : "text-red-400"}`}>
+									{quote.change !== null ? (quote.change >= 0 ? "+" : "") + formatNumber(quote.change, 2) : "—"}
+								</p>
+							</div>
+							<div>
+								<p class="text-[color:var(--paper-dim)] text-xs font-semibold uppercase tracking-wider mb-1">Change %</p>
+								<p class={`text-lg font-semibold ${quote.changePercent !== null && quote.changePercent >= 0 ? "text-green-400" : "text-red-400"}`}>
+									{quote.changePercent !== null ? formatPercent(quote.changePercent) : "—"}
+								</p>
+							</div>
+						</div>
+					</div>
+					<div class="mt-4 flex flex-wrap gap-6 text-sm text-[color:var(--paper-dim)] border-t border-[color:var(--ink-700)] pt-4">
+						<div><span class="font-semibold text-[color:var(--paper)]">{formatNumber(quote.previousClose, 2)}</span> Prev Close</div>
+						<div><span class="font-semibold text-[color:var(--paper)]">{formatNumber(quote.dayLow, 2)} – {formatNumber(quote.dayHigh, 2)}</span> Day Range</div>
+						<div><span class="font-semibold text-[color:var(--paper)]">{formatNumber(quote.fiftyTwoWeekLow, 2)} – {formatNumber(quote.fiftyTwoWeekHigh, 2)}</span> 52-Week Range</div>
+						<div><span class="font-semibold text-[color:var(--paper)]">{formatNumber(quote.volume)}</span> Volume</div>
+						<div><span class="font-semibold text-[color:var(--paper)]">{formatNumber(quote.marketCap)}</span> Market Cap</div>
+					</div>
+				</div>
 
-        <!-- Fundamentals Card -->
-        {fundamentals && (
-          <div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
-            <h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2 mb-5">
-              <iconify-icon icon="mdi:calculator-variant" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
-              Valuation Ratios
-            </h2>
+				<!-- Fundamentals Card -->
+				{fundamentals && (
+					<div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
+						<h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2 mb-5">
+							<iconify-icon icon="mdi:calculator-variant" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
+							Valuation Ratios
+						</h2>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <RatioTile
-                label="P/E (TTM)"
-                value={fundamentals.pe !== null ? fundamentals.pe.toFixed(2) : "—"}
-                source={fundamentals.peSource}
-                colorClass={ratioClass(fundamentals.pe)}
-              />
-              <RatioTile
-                label="P/S (TTM)"
-                value={fundamentals.ps !== null ? fundamentals.ps.toFixed(2) : "—"}
-                colorClass={ratioClass(fundamentals.ps)}
-              />
-              <RatioTile
-                label="PEG"
-                value={fundamentals.peg !== null ? fundamentals.peg.toFixed(2) : "—"}
-                colorClass={ratioClass(fundamentals.peg)}
-              />
-              <RatioTile
-                label="P/B"
-                value={quote.priceToBook !== null ? quote.priceToBook.toFixed(2) : "—"}
-                colorClass={ratioClass(quote.priceToBook)}
-              />
-            </div>
+						<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+							<RatioTile
+								label="P/E (TTM)"
+								value={fundamentals.pe !== null ? fundamentals.pe.toFixed(2) : "—"}
+								source={fundamentals.peSource}
+								colorClass={ratioClass(fundamentals.pe)}
+							/>
+							<RatioTile
+								label="P/S (TTM)"
+								value={fundamentals.ps !== null ? fundamentals.ps.toFixed(2) : "—"}
+								colorClass={ratioClass(fundamentals.ps)}
+							/>
+							<RatioTile
+								label="PEG"
+								value={fundamentals.peg !== null ? fundamentals.peg.toFixed(2) : "—"}
+								colorClass={ratioClass(fundamentals.peg)}
+							/>
+							<RatioTile
+								label="P/B"
+								value={quote.priceToBook !== null ? quote.priceToBook.toFixed(2) : "—"}
+								colorClass={ratioClass(quote.priceToBook)}
+							/>
+						</div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-              <StatTile label="EPS (TTM)" value={formatNumber(quote.epsTrailingTwelveMonths, 2)} />
-              <StatTile label="EPS (Fwd)" value={formatNumber(quote.epsForward, 2)} />
-              <StatTile label="Revenue (TTM)" value={formatNumber(quote.revenueTrailingTwelveMonths)} />
-              <StatTile label="Earnings Growth" value={formatPercent(quote.earningsGrowth)} />
-            </div>
+						<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+							<StatTile label="EPS (TTM)" value={formatNumber(quote.epsTrailingTwelveMonths, 2)} />
+							<StatTile label="EPS (Fwd)" value={formatNumber(quote.epsForward, 2)} />
+							<StatTile label="Revenue (TTM)" value={formatNumber(quote.revenueTrailingTwelveMonths)} />
+							<StatTile label="Earnings Growth" value={formatPercent(quote.earningsGrowth)} />
+						</div>
 
-            {fundamentals.peSource === "computed" && (
-              <p class="mt-4 text-xs text-[color:var(--paper-muted)] italic">
-                ⚠ P/E was computed (price ÷ EPS) because Yahoo did not report a trailing PE for this ticker.
-              </p>
-            )}
-          </div>
-        )}
+						{fundamentals.peSource === "computed" && (
+							<p class="mt-4 text-xs text-[color:var(--paper-muted)] italic">
+								⚠ P/E was computed (price ÷ EPS) because Yahoo did not report a trailing PE for this ticker.
+							</p>
+						)}
+					</div>
+				)}
 
-        <!-- Segment Revenue Breakdown (Phase 2) -->
-        {segments && (
-          <div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
-            <div class="flex items-center justify-between gap-4 mb-5">
-              <h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2">
-                <iconify-icon icon="mdi:chart-pie" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
-                Segment Revenue
-              </h2>
-              <span class="text-xs text-[color:var(--paper-dim)]">{segments.period} · {segments.source}</span>
-            </div>
+				<!-- Segment Revenue Breakdown (Phase 2) -->
+				{segments && (
+					<div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
+						<div class="flex items-center justify-between gap-4 mb-5">
+							<h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2">
+								<iconify-icon icon="mdi:chart-pie" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
+								Segment Revenue
+							</h2>
+							<span class="text-xs text-[color:var(--paper-dim)]">{segments.period} · {segments.source}</span>
+						</div>
 
-            <div class="space-y-3">
-              {segments.segments.map((s) => {
-                const max = Math.max(...segments.segments.map((x) => x.revenue));
-                const pct = max > 0 ? (s.revenue / max) * 100 : 0;
-                return (
-                  <div>
-                    <div class="flex items-center justify-between text-sm mb-1">
-                      <span class="text-[color:var(--paper)] font-medium">{s.label}</span>
-                      <span class="text-[color:var(--paper-dim)] font-mono">{formatNumber(s.revenue)}</span>
-                    </div>
-                    <div class="h-2 rounded bg-[color:var(--ink-700)] overflow-hidden">
-                      <div class="h-full rounded bg-gradient-to-r from-[color:var(--accent)] to-[color:var(--accent-light)]" style={`width:${pct}%`}></div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+						<div class="space-y-3">
+							{segments.segments.map((s) => {
+								const max = Math.max(...segments.segments.map((x) => x.revenue));
+								const pct = max > 0 ? (s.revenue / max) * 100 : 0;
+								return (
+									<div>
+										<div class="flex items-center justify-between text-sm mb-1">
+											<span class="text-[color:var(--paper)] font-medium">{s.label}</span>
+											<span class="text-[color:var(--paper-dim)] font-mono">{formatNumber(s.revenue)}</span>
+										</div>
+										<div class="h-2 rounded bg-[color:var(--ink-700)] overflow-hidden">
+											<div class="h-full rounded bg-gradient-to-r from-[color:var(--accent)] to-[color:var(--accent-light)]" style={`width:${pct}%`}></div>
+										</div>
+									</div>
+								);
+							})}
+						</div>
 
-            {segments.sourceSummary && (
-              <p class="mt-4 text-xs text-[color:var(--paper-muted)] italic">Source: {segments.sourceSummary}</p>
-            )}
-          </div>
-        )}
-        {!segments && (
-          <PhasePlaceholder title="Segment Revenue Breakdown" icon="mdi:chart-pie" description="No segment revenue available for this company from SEC filings." />
-        )}
+						{segments.sourceSummary && (
+							<p class="mt-4 text-xs text-[color:var(--paper-muted)] italic">Source: {segments.sourceSummary}</p>
+						)}
+					</div>
+				)}
+				{!segments && quote?.market === "US" && (
+					<PhasePlaceholder
+						title="Segment Revenue Breakdown"
+						icon="mdi:chart-pie"
+						description="No segment revenue available for this company from SEC filings."
+						badge="Phase 2"
+					/>
+				)}
 
-        <!-- Placeholders for future phases -->
-        <div class="space-y-6">
-          <PhasePlaceholder title="Earnings Audit" icon="mdi:file-document-edit" description="Adjusted EPS/PE/PEG after identifying one-off items from filings. Runs after segment data is available." />
-          <PhasePlaceholder title="Peer Comparison" icon="mdi:account-group" description="Live PE/PS/PEG comparison against 3–5 sector peers. Requires live peer data fetch." />
-          <PhasePlaceholder title="Fair Value Band" icon="mdi:gauge" description="Implied price from peer-average PE × EPS, with sensitivity range. Requires peers + audit." />
-        </div>
-      </>
-    )}
-  </main>
+				<!-- Earnings Audit (Phase 3) -->
+				{audit && (
+					<div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
+						<div class="flex items-center justify-between gap-4 mb-5">
+							<h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2">
+								<iconify-icon icon="mdi:file-document-edit" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
+								Earnings Audit
+							</h2>
+							<span class="text-xs text-[color:var(--paper-dim)]">{audit.period} · {audit.source}</span>
+						</div>
+
+						{audit.items.length > 0 ? (
+							<>
+								<div class="space-y-2 mb-5">
+									{audit.items.map((it) => (
+										<div class="flex items-start justify-between gap-4 text-sm bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg px-3 py-2">
+											<div>
+												<span class="text-[color:var(--paper)] font-medium">{it.label}</span>
+												<span class={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded ${it.impact === "charge" ? "text-red-400 bg-red-400/10" : "text-green-400 bg-green-400/10"}`}>{it.impact === "charge" ? "CHARGE" : "GAIN"}</span>
+											</div>
+											<span class="font-mono text-[color:var(--paper-dim)]">{formatNumber(it.amount)}</span>
+										</div>
+									))}
+								</div>
+
+								<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+									<RatioTile label="Reported EPS" value={formatNumber(audit.reportedEps, 2)} />
+									<RatioTile
+										label="Adjusted EPS"
+										value={formatNumber(audit.adjustedEps, 2)}
+										colorClass={audit.adjustedEps !== null && audit.reportedEps !== null && audit.adjustedEps !== audit.reportedEps ? "text-[color:var(--accent)]" : ""}
+									/>
+									<RatioTile label="Reported P/E" value={audit.reportedPe !== null ? audit.reportedPe.toFixed(2) : "—"} />
+									<RatioTile
+										label="Adjusted P/E"
+										value={audit.adjustedPe !== null ? audit.adjustedPe.toFixed(2) : "—"}
+										colorClass={audit.adjustedPe !== null ? "text-[color:var(--accent)]" : "text-[color:var(--paper-muted)]"}
+									/>
+								</div>
+							</>
+						) : (
+							<p class="text-sm text-[color:var(--paper-dim)]">{audit.summary}</p>
+						)}
+
+						{audit.summary && audit.items.length > 0 && (
+							<p class="mt-4 text-xs text-[color:var(--paper-muted)] italic">{audit.summary}</p>
+						)}
+					</div>
+				)}
+				{!audit && quote?.market === "US" && (
+					<PhasePlaceholder
+						title="Earnings Audit"
+						icon="mdi:file-document-edit"
+						description="One-off item identification unavailable right now (filing fetch or LLM step failed)."
+						badge="Phase 3"
+					/>
+				)}
+
+				<!-- Peer Comparison (Phase 4) -->
+				{peers && peers.peers.length > 0 && (
+					<div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
+						<div class="flex items-center justify-between gap-4 mb-5">
+							<h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2">
+								<iconify-icon icon="mdi:account-group" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
+								Peer Comparison
+							</h2>
+							<span class="text-xs text-[color:var(--paper-dim)]">{peers.peers.length} peers · live</span>
+						</div>
+
+						<div class="overflow-x-auto">
+							<table class="w-full text-sm">
+								<thead>
+									<tr class="text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider border-b border-[color:var(--ink-600)]">
+										<th class="py-2 pr-4">Peer</th>
+										<th class="py-2 pr-4">P/E</th>
+										<th class="py-2 pr-4">P/S</th>
+										<th class="py-2 pr-4">PEG</th>
+									</tr>
+								</thead>
+								<tbody class="divide-y divide-[color:var(--ink-700)]">
+									{peers.peers.map((p) => (
+										<tr>
+											<td class="py-2 pr-4">
+												<span class="font-mono font-semibold text-[color:var(--accent)]">{p.ticker}</span>
+												<span class="ml-2 text-[color:var(--paper-dim)] hidden md:inline">{p.shortName}</span>
+											</td>
+											<td class="py-2 pr-4 font-mono">{p.pe !== null ? p.pe.toFixed(1) : "—"}</td>
+											<td class="py-2 pr-4 font-mono">{p.ps !== null ? p.ps.toFixed(1) : "—"}</td>
+											<td class="py-2 pr-4 font-mono">{p.peg !== null ? p.peg.toFixed(2) : "—"}</td>
+										</tr>
+									))}
+									<tr class="font-semibold border-t-2 border-t-[color:var(--ink-600)]">
+										<td class="py-2 pr-4 text-[color:var(--paper)]">Peer average</td>
+										<td class="py-2 pr-4 font-mono text-[color:var(--accent)]">{peers.averages.pe !== null ? peers.averages.pe.toFixed(1) : "—"}</td>
+										<td class="py-2 pr-4 font-mono text-[color:var(--accent)]">{peers.averages.ps !== null ? peers.averages.ps.toFixed(1) : "—"}</td>
+										<td class="py-2 pr-4 font-mono text-[color:var(--accent)]">{peers.averages.peg !== null ? peers.averages.peg.toFixed(2) : "—"}</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</div>
+				)}
+				{!peers && (
+					<PhasePlaceholder
+						title="Peer Comparison"
+						icon="mdi:account-group"
+						description="No curated peer set for this ticker yet — comparison covers well-known names only for now."
+						badge="Phase 4"
+					/>
+				)}
+				{peers && peers.peers.length === 0 && (
+					<PhasePlaceholder
+						title="Peer Comparison"
+						icon="mdi:account-group"
+						description={peers.unavailableNote ?? "Peer data unavailable right now."}
+						badge="Phase 4"
+					/>
+				)}
+
+				<!-- Fair Value (Phase 4) -->
+				{fairValue && (
+					<div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
+						<div class="flex items-center justify-between gap-4 mb-5">
+							<h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2">
+								<iconify-icon icon="mdi:gauge" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
+								Fair Value
+							</h2>
+							<span class="text-xs text-[color:var(--paper-dim)]">{fairValue.formula}</span>
+						</div>
+
+						<div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+							<div>
+								<p class="text-[color:var(--paper-dim)] text-xs font-semibold uppercase tracking-wider mb-1">Implied price</p>
+								<p class="text-4xl font-bold text-[color:var(--paper)]">
+									{cur(quote.currency)}{formatNumber(fairValue.impliedPrice, 2)}
+								</p>
+							</div>
+							<div class="text-right">
+								<p class="text-[color:var(--paper-dim)] text-xs font-semibold uppercase tracking-wider mb-1">vs market price</p>
+								<p class={`text-4xl font-bold ${fairValue.vsPrice !== null && fairValue.vsPrice > 0 ? "text-green-400" : "text-red-400"}`}>
+									{fairValue.vsPrice !== null ? formatPercent(fairValue.vsPrice) : "—"}
+								</p>
+							</div>
+						</div>
+
+						<div class="mt-4 grid grid-cols-3 gap-4 text-sm border-t border-[color:var(--ink-700)] pt-4">
+							<div><span class="font-semibold text-[color:var(--paper)]">{cur(quote.currency)}{formatNumber(fairValue.low, 2)}</span> Band low</div>
+							<div><span class="font-semibold text-[color:var(--accent)]">{cur(quote.currency)}{formatNumber(fairValue.impliedPrice, 2)}</span> Implied</div>
+							<div><span class="font-semibold text-[color:var(--paper)]">{cur(quote.currency)}{formatNumber(fairValue.high, 2)}</span> Band high</div>
+						</div>
+
+						<p class="mt-4 text-xs text-[color:var(--paper-muted)] italic">
+							Inputs: peer-avg P/E {formatNumber(fairValue.peerPe, 1)} × EPS {formatNumber(fairValue.eps, 2)} · market price {cur(quote.currency)}{formatNumber(quote.price, 2)}
+						</p>
+					</div>
+				)}
+				{peers && peers.peers.length > 0 && !fairValue && (
+					<PhasePlaceholder
+						title="Fair Value Band"
+						icon="mdi:gauge"
+						description="Needs a peer-average P/E and positive EPS to compute an implied price."
+						badge="Phase 4"
+					/>
+				)}
+			</>
+		)}
+	</main>
 </body>
 </html>
-
-<script is:inline>
-  // Small inline components to keep the template tidy
-  function RatioTile({ label, value, source, colorClass }) {
-    return (
-      <div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-4">
-        <p class="text-xs text-[color:var(--paper-dim)] uppercase tracking-wider mb-1">{label}</p>
-        <p class="text-2xl font-bold {colorClass}">{value}</p>
-        {source && (
-          <p class="text-[10px] text-[color:var(--paper-muted)] mt-1 font-mono">{source}</p>
-        )}
-      </div>
-    );
-  }
-
-  function StatTile({ label, value }) {
-    return (
-      <div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-4">
-        <p class="text-xs text-[color:var(--paper-dim)] uppercase tracking-wider mb-1">{label}</p>
-        <p class="text-lg font-mono text-[color:var(--paper)]">{value}</p>
-      </div>
-    );
-  }
-
-  function PhasePlaceholder({ title, icon, description }) {
-    return (
-      <div class="bg-[color:var(--ink-850)] border border-[color:var(--ink-700)] border-dashed rounded-xl p-5">
-        <div class="flex items-start gap-3">
-          <div class="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-[color:var(--ink-900)] border border-[color:var(--ink-600)] rounded-lg">
-            <iconify-icon icon={icon} class="text-[color:var(--ink-500)] text-2xl"></iconify-icon>
-          </div>
-          <div class="flex-1">
-            <h3 class="font-semibold text-[color:var(--paper-dim)]">{title}</h3>
-            <p class="text-sm text-[color:var(--paper-muted)] mt-1">{description}</p>
-          </div>
-          <span class="flex-shrink-0 px-2 py-1 text-[10px] font-bold text-[color:var(--ink-500)] bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded">
-            Phase 2+
-          </span>
-        </div>
-      </div>
-    );
-  }
-</script>

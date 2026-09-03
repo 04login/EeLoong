@@ -31,6 +31,10 @@ export async function lookupTicker(raw: string): Promise<StockResult> {
 
 export { searchTickers } from "./sources/yahoo.ts";
 export { getSegments, type SegmentResult } from "./pipeline/segments.ts";
+export { getEarningsAudit, type AuditResult, type AuditItem } from "./pipeline/earnings-audit.ts";
+export { getPeerComparison, type PeerComparison, type PeerRow } from "./pipeline/peer-comparison.ts";
+export { computeFairValue, type FairValue } from "./pipeline/fair-value.ts";
+export { PEER_GROUPS } from "./config.ts";
 export type {
   Fundamentals,
   SearchHit,

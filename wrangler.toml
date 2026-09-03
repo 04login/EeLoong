@@ -9,5 +9,5 @@ database_id = "d1571101-a141-4378-89c9-f5693a691a34"
 
 [[kv_namespaces]]
 binding = "STOCK_CACHE"
-id = "your-kv-namespace-id-here"
-preview_id = "your-preview-kv-namespace-id-here"
+id = "f44fe446a2c54ac0a2fab56776f04077"
+preview_id = "30a04d45a0834601a11222ec1249b851"

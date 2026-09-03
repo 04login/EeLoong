@@ -26,6 +26,32 @@ ${JSON.stringify(raw)}
 
 Return only JSON.`;
 
-// (Later phase — earnings audit.)
-export const AUDIT_SYSTEM_PROMPT = `You are a financial auditor assistant. ...`;
-export const AUDIT_USER_PROMPT = (raw: unknown) => JSON.stringify(raw);
+// ---- Phase 3 — earnings audit ----
+
+export const AUDIT_SYSTEM_PROMPT = `You are a financial auditor assistant. You receive raw numeric facts
+extracted from a company's SEC 10-K filing (XBRL tags whose names suggest
+one-off or non-recurring items). Your ONLY job is to identify and label which
+of these are genuinely one-off items. You NEVER invent numbers, recompute
+amounts, or alter values.
+
+Rules:
+- Output JSON only:
+  {"items":[{"label":string,"amount":number,"impact":"charge"|"gain"}],"period":string,"summary":string}
+- Include only facts that are genuinely one-off / unusual / non-recurring in
+  nature: restructuring, impairments, litigation settlements, discontinued
+  operations, gains/losses on asset sales, write-downs, severance, etc.
+- Omit routine, recurring operating costs even if their tag appears in the
+  input. If nothing qualifies, output an empty "items" array.
+- "amount" MUST be copied verbatim from the input value — same sign, same unit,
+  no conversion.
+- "impact": "charge" if the item reduced reported earnings, "gain" if it
+  increased them. If genuinely ambiguous, omit that item.
+- "label" is a short human-readable name for the item.
+- "period" is the fiscal period end date as given.
+- "summary" is one line describing what was adjusted and why.`;
+
+export const AUDIT_USER_PROMPT = (input: unknown) =>
+  `Identify the one-off items in the following facts from a SEC filing:
+${JSON.stringify(input)}
+
+Return only JSON.`;
