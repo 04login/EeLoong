@@ -48,18 +48,27 @@ export async function getSegments(
 
   // 1. CIK (US only for now).
   const cikInfo = await tickerToCik(t, kv);
-  if (!cikInfo) return null;
+  if (!cikInfo) {
+    console.log("[stocks:segments] no CIK for", t);
+    return null;
+  }
 
   // 2. Latest 10-K.
   const filing = await latest10K(cikInfo.cik);
-  if (!filing) return null;
+  if (!filing) {
+    console.log("[stocks:segments] no 10-K found for CIK", cikInfo.cik);
+    return null;
+  }
 
   const fyEnd = filing.fyEnd;
   const cacheKey = `segments:${t}:${fyEnd}`;
 
   // 3. Cache hit?
   const cached = await kvGet<SegmentResult>(kv, cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    console.log("[stocks:segments] cache hit:", cacheKey);
+    return cached;
+  }
 
   // 4. Extract raw rows (XBRL first, HTML fallback).
   let rows: { label: string; value: number }[] = [];
@@ -69,19 +78,22 @@ export async function getSegments(
 
   try {
     const xbrl = await fetchXbrlSegmentRows(filing);
+    console.log("[stocks:segments] XBRL rows:", xbrl?.rows.length ?? "null");
     if (xbrl && xbrl.rows.length > 0) {
       rows = xbrl.rows;
       period = xbrl.period || fyEnd;
       source = "xbrl";
       sourceSummary = "10-K XBRL instance — segment/product dimension facts";
     }
-  } catch {
+  } catch (e) {
+    console.error("[stocks:segments] XBRL fetch threw:", e);
     // fall through to HTML
   }
 
   if (rows.length === 0) {
     try {
       const htmlTables = await fetchHtmlSegmentTables(filing);
+      console.log("[stocks:segments] HTML tables:", htmlTables?.length ?? "null");
       if (htmlTables && htmlTables.length > 0) {
         // The LLM is far better at turning these ragged rows into good JSON.
         rows = htmlTables.flat().map((line) => ({
@@ -102,6 +114,7 @@ export async function getSegments(
   let llmOk = false;
   try {
     const normalized = await llmStructured(env, "segment-normalize", SEGMENT_SYSTEM_PROMPT, SEGMENT_USER_PROMPT({ period, rows }));
+    console.log("[stocks:segments] LLM returned:", JSON.stringify(normalized).slice(0, 500));
     const segs = (normalized?.segments as { label: string; revenue: number }[] | undefined)?.filter((s) => s?.label && Number.isFinite(s?.revenue));
     if (segs && segs.length > 0) {
       rows = segs.map((s) => ({ label: s.label, value: s.revenue }));
@@ -112,7 +125,8 @@ export async function getSegments(
       // LLM returned nothing usable — keep the raw XBRL/HTML rows; source stays
       // "xbrl"/"html" because the numbers still genuinely came from those files.
     }
-  } catch {
+  } catch (e) {
+    console.error("[stocks:segments] LLM threw:", e);
     // LLM unavailable — keep the raw rows; UI still shows them (labelled raw).
   }
 

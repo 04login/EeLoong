@@ -49,7 +49,11 @@ export async function llmStructured(
   timeoutMs = 10_000,
 ): Promise<Record<string, unknown> | null> {
   const key = env.OPENROUTER_API_KEY;
-  if (!key) throw new Error("LLM unavailable (no OPENROUTER_API_KEY)");
+  if (!key) {
+    console.error("[stocks:llm] no OPENROUTER_API_KEY");
+    throw new Error("LLM unavailable (no OPENROUTER_API_KEY)");
+  }
+  console.log("[stocks:llm] calling openrouter/free, role:", _role, "prompt chars:", system.length + user.length);
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -72,12 +76,18 @@ export async function llmStructured(
       signal: ctrl.signal,
     });
     if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      console.error("[stocks LLM HTTP error:", res.status, errBody.slice(0, 300));
       throw new Error(`LLM unavailable (openrouter/free HTTP ${res.status})`);
     }
     const data = (await res.json()) as any;
+    console.log("[stocks:llm] HTTP 200, model used:", data?.model ?? "unknown", "usage:", JSON.stringify(data?.usage ?? {}));
     const text: string | undefined = data?.choices?.[0]?.message?.content;
     const parsed = extractJson(text ?? "");
-    if (!parsed) throw new Error("LLM unavailable (openrouter/free: empty/invalid JSON)");
+    if (!parsed) {
+      console.error("[stocks:llm] unparseable model output:", (text ?? "").slice(0, 300));
+      throw new Error("LLM unavailable (openrouter/free: empty/invalid JSON)");
+    }
     return parsed;
   } catch (e) {
     if (e instanceof Error && e.message.startsWith("LLM unavailable")) throw e;

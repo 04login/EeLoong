@@ -110,32 +110,46 @@ export async function getEarningsAudit(
 
   // 1. CIK (US only for now).
   const cikInfo = await tickerToCik(t, kv);
-  if (!cikInfo) return null;
+  if (!cikInfo) {
+    console.log("[stocks:audit] no CIK for", t);
+    return null;
+  }
 
   // 2. Latest 10-K.
   const filing = await latest10K(cikInfo.cik);
-  if (!filing) return null;
+  if (!filing) {
+    console.log("[stocks:audit] no 10-K for CIK", cikInfo.cik);
+    return null;
+  }
 
   const fyEnd = filing.fyEnd;
   const cacheKey = `audit:${t}:${fyEnd}`;
 
   // 3. Cache hit?
   const cached = await kvGet<AuditResult>(kv, cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    console.log("[stocks:audit] cache hit:", cacheKey);
+    return cached;
+  }
 
   // 4. Raw one-off facts from XBRL.
   let rawRows: { label: string; value: number }[] = [];
   let period = fyEnd;
   try {
     const raw = await fetchXbrlOneOffFacts(filing);
+    console.log("[stocks:audit] raw XBRL one-off facts:", raw?.rows.length ?? "null");
     if (raw && raw.rows.length > 0) {
       rawRows = raw.rows;
       period = raw.period || fyEnd;
     }
-  } catch {
+  } catch (e) {
+    console.error("[stocks:audit] XBRL fetch threw:", e);
     return null; // no raw facts → no audit
   }
-  if (rawRows.length === 0) return null;
+  if (rawRows.length === 0) {
+    console.log("[stocks:audit] no raw facts → null");
+    return null;
+  }
 
   // 5. LLM labels which are genuinely one-off (charge/gain).
   let labeled: LabeledFact[] = [];
@@ -147,6 +161,7 @@ export async function getEarningsAudit(
       AUDIT_SYSTEM_PROMPT,
       AUDIT_USER_PROMPT({ period, rows: rawRows }),
     );
+    console.log("[stocks:audit] LLM returned:", JSON.stringify(normalized).slice(0, 500));
     const items = (normalized?.items as LabeledFact[] | undefined)?.filter(
       (s) => s?.label && Number.isFinite(s?.amount) && (s?.impact === "charge" || s?.impact === "gain"),
     );
@@ -154,7 +169,8 @@ export async function getEarningsAudit(
       labeled = items;
       llmSummary = typeof normalized?.summary === "string" ? normalized.summary : null;
     }
-  } catch {
+  } catch (e) {
+    console.error("[stocks:audit] LLM threw:", e);
     return null; // LLM unavailable → no audit (no fake adjustments)
   }
 

@@ -40,7 +40,10 @@ async function fetchSecText(url: string): Promise<string> {
       headers: { "User-Agent": SEC_USER_AGENT },
       signal: ctrl.signal,
     });
-    if (!res.ok) throw new Error(`SEC ${url} failed with ${res.status}`);
+    if (!res.ok) {
+      console.error("[stocks:edgar] HTTP", res.status, url);
+      throw new Error(`SEC ${url} failed with ${res.status}`);
+    }
     return res.text();
   } finally {
     clearTimeout(timer);

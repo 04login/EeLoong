@@ -26,6 +26,7 @@ if (!ticker) throw new Error("Missing ticker param");
 
 const result = await lookupTicker(ticker);
 const { quote, fundamentals, error } = result;
+console.log("[stocks] lookupTicker:", ticker, JSON.stringify({ market: quote?.market, symbol: quote?.symbol, error }));
 
 // Phase 2 — segment revenue (US only, best-effort). Fails silently to a null
 // so the panel renders "not available" instead of erroring.
@@ -33,9 +34,13 @@ let segments: SegmentResult | null = null;
 if (quote?.market === "US") {
 	try {
 		segments = await getSegments(env, env?.STOCK_CACHE, ticker);
-	} catch {
+		console.log("[stocks] getSegments:", ticker, segments ? `ok (${segments.segments.length} rows, source=${segments.source})` : "null");
+	} catch (e) {
+		console.error("[stocks] getSegments THREW:", ticker, e);
 		segments = null;
 	}
+} else {
+	console.log("[stocks] segments skipped (market not US):", quote?.market ?? "no quote");
 }
 
 // Phase 3 — earnings audit (US only, same failure posture).
@@ -43,7 +48,9 @@ let audit: AuditResult | null = null;
 if (quote?.market === "US") {
 	try {
 		audit = await getEarningsAudit(env, env?.STOCK_CACHE, ticker, quote);
-	} catch {
+		console.log("[stocks] getEarningsAudit:", ticker, audit ? `ok (${audit.items.length} items)` : "null");
+	} catch (e) {
+		console.error("[stocks] getEarningsAudit THREW:", ticker, e);
 		audit = null;
 	}
 }
@@ -54,14 +61,18 @@ let peers: PeerComparison | null = null;
 let fairValue: FairValue | null = null;
 if (quote) {
 	const peerSet = PEER_GROUPS[quote.symbol];
+	console.log("[stocks] peer set:", quote.symbol, peerSet ? peerSet.join(",") : "none");
 	if (peerSet) {
 		try {
 			peers = await getPeerComparison(quote.symbol, peerSet);
-		} catch {
+			console.log("[stocks] getPeerComparison:", peers?.peers.length ?? 0, "rows");
+		} catch (e) {
+			console.error("[stocks] getPeerComparison THREW:", e);
 			peers = null;
 		}
 		if (peers) {
 			fairValue = await computeFairValue(quote.symbol, peers, quote.epsTrailingTwelveMonths, quote.price);
+			console.log("[stocks] fairValue:", JSON.stringify(fairValue));
 		}
 	}
 }
