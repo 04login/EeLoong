@@ -175,18 +175,19 @@ export const projects: Project[] = [
 	,
 	{
 		id: 6,
-		title: 'Valuation Desk',
+		title: 'Stock Research',
 		role: 'Tool',
 		period: '2026',
 		institution: 'Personal Project',
-		description: 'Interactive discounted cash flow workbench and valuation tool built with vanilla JS and Chart.js.',
+		description: 'On-demand stock research: live PE/P/S/PEG from Yahoo Finance, SEC segment revenue breakdown, LLM-assisted earnings audit of one-off items, peer comparison, and a fair-value band.',
 		achievements: [
-			'Interactive DCF builder with projections, sensitivity, and comps cross-check',
-			'Exportable model JSON/CSV and editable projections',
-			'Client-side data fetch from Financial Modeling Prep API (optional)'
+			'Live PE/P/S/PEG for any ticker, including SGX (.SI), fetched on demand with no stored universe',
+			'SEC EDGAR segment-revenue breakdown from raw 10-K XBRL, with an HTML-note fallback for companies that only tag the aggregate',
+			'LLM-classified earnings audit that adjusts EPS/PE for one-off items — arithmetic done in code, LLM only labels',
+			'Peer comparison and fair-value band computed from peer-average P/E × EPS with a disclosed ±20% band'
 		],
-		technologies: ['JavaScript', 'Chart.js', 'Astro'],
-		link: '/projects/valuation',
+		technologies: ['Astro', 'Tailwind CSS', 'Cloudflare Workers', 'Cloudflare KV', 'Yahoo Finance', 'SEC EDGAR', 'Gemini'],
+		link: '/projects/stocks',
 		featured: false
 	}
 ];
