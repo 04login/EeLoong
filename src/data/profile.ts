@@ -186,7 +186,7 @@ export const projects: Project[] = [
 			'LLM-classified earnings audit that adjusts EPS/PE for one-off items — arithmetic done in code, LLM only labels',
 			'Peer comparison and fair-value band computed from peer-average P/E × EPS with a disclosed ±20% band'
 		],
-		technologies: ['Astro', 'Tailwind CSS', 'Cloudflare Workers', 'Cloudflare KV', 'Yahoo Finance', 'SEC EDGAR', 'Gemini'],
+		technologies: ['Astro', 'Tailwind CSS', 'Cloudflare Workers', 'Cloudflare KV', 'Yahoo Finance', 'SEC EDGAR', 'OpenRouter'],
 		link: '/projects/stocks',
 		featured: false
 	}
