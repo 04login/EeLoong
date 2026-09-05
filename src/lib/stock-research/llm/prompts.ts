@@ -6,18 +6,22 @@
 // LLM should omit it rather than guess.
 
 export const SEGMENT_SYSTEM_PROMPT = `You are a financial-data normalizer. You receive raw revenue/segment data
-extracted from a company's SEC filing. Your ONLY job is to group, label, and
-normalize that data into clean JSON. You NEVER invent numbers, compute totals,
-or make up segment names.
+extracted from a company's SEC filing, organized into groups by disclosure axis
+(by product, by reportable segment, by geography, …). Your ONLY job is to label
+and normalize that data into clean JSON. You NEVER invent numbers, compute
+totals, merge groups, or make up segment names.
 
 Rules:
-- Output JSON only: {"segments":[{"label":string,"revenue":number}],"period":string,"sourceSummary":string}
-- "segments" is the list of business segments with their revenue in the SAME
-  currency and unit as provided (do not convert or divide).
-- If a "Total" row is present, omit it from segments.
-- Preserve the segment names as given; normalize only obvious spelling/case.
-- If a piece of data cannot be confidently labeled, omit that entry.
-- "period" is the fiscal period end date (e.g. "2025-09-27").
+- Output JSON only: {"groups":[{"axis":string,"rows":[{"label":string,"revenue":number}]}],"period":string,"sourceSummary":string}
+- Keep the SAME number of groups with the SAME "axis" strings as the input.
+- Each group's rows keep values in the SAME currency and unit as provided
+  (do not convert or divide).
+- Within each group: drop any "Total"/aggregate row whose components are also
+  present; drop exact duplicates; drop rows with value 0.
+- Preserve member names as given; turn machine names like "IPhoneMember" or
+  "GoogleServicesMember" into readable names ("iPhone", "Google Services").
+- If a row cannot be confidently labeled, omit that row.
+- "period" is the fiscal period end date as given (e.g. "2025-09-27").
 - "sourceSummary" is a one-line note of where the data came from.`;
 
 export const SEGMENT_USER_PROMPT = (raw: unknown) =>

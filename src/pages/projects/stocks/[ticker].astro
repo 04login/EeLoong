@@ -34,7 +34,7 @@ let segments: SegmentResult | null = null;
 if (quote?.market === "US") {
 	try {
 		segments = await getSegments(env, env?.STOCK_CACHE, ticker);
-		console.log("[stocks] getSegments:", ticker, segments ? `ok (${segments.segments.length} rows, source=${segments.source})` : "null");
+		console.log("[stocks] getSegments:", ticker, segments ? `ok (${segments.groups.reduce((n, g) => n + g.rows.length, 0)} rows in ${segments.groups.length} groups, source=${segments.source})` : "null");
 	} catch (e) {
 		console.error("[stocks] getSegments THREW:", ticker, e);
 		segments = null;
@@ -229,23 +229,27 @@ const cur = (c: string | null): string => (c === "USD" ? "$" : c === "SGD" ? "S$
 							<span class="text-xs text-[color:var(--paper-dim)]">{segments.period} · {segments.source}</span>
 						</div>
 
-						<div class="space-y-3">
-							{segments.segments.map((s) => {
-								const max = Math.max(...segments.segments.map((x) => x.revenue));
-								const pct = max > 0 ? (s.revenue / max) * 100 : 0;
-								return (
-									<div>
-										<div class="flex items-center justify-between text-sm mb-1">
-											<span class="text-[color:var(--paper)] font-medium">{s.label}</span>
-											<span class="text-[color:var(--paper-dim)] font-mono">{formatNumber(s.revenue)}</span>
-										</div>
-										<div class="h-2 rounded bg-[color:var(--ink-700)] overflow-hidden">
-											<div class="h-full rounded bg-gradient-to-r from-[color:var(--accent)] to-[color:var(--accent-light)]" style={`width:${pct}%`}></div>
-										</div>
-									</div>
-								);
-							})}
-						</div>
+						<div class="space-y-6">
+							{segments.groups.map((group) => (
+								<div>
+									<p class="text-xs font-semibold uppercase tracking-wider text-[color:var(--paper-dim)] mb-2">{group.axisLabel}</p>
+									{group.rows.map((s) => {
+										const max = Math.max(...group.rows.map((x) => x.revenue));
+										const pct = max > 0 ? (s.revenue / max) * 100 : 0;
+										return (
+											<div class="mb-2.5">
+												<div class="flex items-center justify-between text-sm mb-1">
+													<span class="text-[color:var(--paper)] font-medium">{s.label}</span>
+													<span class="text-[color:var(--paper-dim)] font-mono">{formatNumber(s.revenue)}</span>
+												</div>
+												<div class="h-2 rounded bg-[color:var(--ink-700)] overflow-hidden">
+													<div class="h-full rounded bg-gradient-to-r from-[color:var(--accent)] to-[color:var(--accent-light)]" style={`width:${pct}%`}></div>
+												</div>
+											</div>
+										);
+									})}
+								</div>
+							))}</div>
 
 						{segments.sourceSummary && (
 							<p class="mt-4 text-xs text-[color:var(--paper-muted)] italic">Source: {segments.sourceSummary}</p>

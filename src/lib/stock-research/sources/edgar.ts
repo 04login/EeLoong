@@ -166,13 +166,20 @@ export function parseXbrlNumericFacts(xml: string, tagFilter?: RegExp): XbrlReve
   return facts;
 }
 
-// Turn XBRL into raw segment rows: { label, value } for the most recent FY.
-// Returns an object with the period end date, or null if no dimensional facts.
+// Turn XBRL into raw segment rows grouped by dimension axis, for the most
+// recent annual period. Returns null if no dimensional revenue facts.
+//
+// Why grouped by axis: Apple tags revenue on SEVERAL axes at once —
+// ProductOrServiceAxis (iPhone/Mac/Services…), StatementBusinessSegmentsAxis
+// (its two reportable segments), StatementGeographicalAxis (US/China/Europe…).
+// Flattening all axes into one list double-counts (aggregate ProductMember
+// alongside its components iPhone/Mac/…, the same China value under two axes)
+// and is unreadable. Grouping by axis keeps each group a single complete slice.
 export function xbrlSegmentsToRows(
   contexts: Map<string, { members: XbrlMember[]; endDate: string }>,
   facts: XbrlRevenueFact[],
-): { period: string; rows: { label: string; value: number }[] } | null {
-  // Group revenue facts by segment member + period end (annual length).
+): { period: string; groups: { axis: string; rows: { label: string; value: number }[] }[] } | null {
+  // Group revenue facts by (axis, member, period end).
   type Agg = { value: number; period: string };
   const byKey = new Map<string, Agg>();
 
@@ -185,37 +192,49 @@ export function xbrlSegmentsToRows(
     const members = (ctx.members ?? []).filter((m) => dimHints.test(m.axis));
     if (members.length === 0) continue;
 
-    // Use the first (coarsest) business dimension; ignore other axes (geographic…).
-    const member = members[0].member;
-    if (!member) continue;
-    const key = `${member}|${ctx.endDate}`;
-    const existing = byKey.get(key);
-    // Annual fact (spans a year) beats quarterly; keep the largest |val| for a
-    // given (member, period) — typically the FY value.
-    if (!existing || Math.abs(f.value) > Math.abs(existing.value)) {
-      byKey.set(key, { value: f.value, period: ctx.endDate });
+    // One row per (axis, member): a fact tagged on multiple useful axes
+    // contributes to each axis's slice — but never twice within one slice.
+    for (const m of members) {
+      if (!m.member) continue;
+      const key = `${m.axis}|${m.member}|${ctx.endDate}`;
+      const existing = byKey.get(key);
+      // Annual fact (spans a year) beats quarterly; keep the largest |val| for
+      // a given (axis, member, period) — typically the FY value.
+      if (!existing || Math.abs(f.value) > Math.abs(existing.value)) {
+        byKey.set(key, { value: f.value, period: ctx.endDate });
+      }
     }
   }
   if (byKey.size === 0) return null;
 
-  // Bucket by period, pick the most recent with the most members.
-  const byPeriod = new Map<string, { label: string; value: number }[]>();
+  // Bucket by period, pick the most recent one.
+  const byPeriod = new Map<string, Map<string, { label: string; value: number }[]>>();
   for (const [key, agg] of byKey) {
-    const [label] = key.split("|");
-    const arr = byPeriod.get(agg.period) ?? [];
-    arr.push({ label, value: agg.value });
-    byPeriod.set(agg.period, arr);
+    const [axis, member] = key.split("|");
+    let byAxis = byPeriod.get(agg.period);
+    if (!byAxis) {
+      byAxis = new Map();
+      byPeriod.set(agg.period, byAxis);
+    }
+    const arr = byAxis.get(axis) ?? [];
+    arr.push({ label: member, value: agg.value });
+    byAxis.set(axis, arr);
   }
   const periods = [...byPeriod.keys()].sort();
   const latest = periods[periods.length - 1];
-  const rows = (byPeriod.get(latest) ?? []).sort((a, b) => b.value - a.value);
+  const byAxis = byPeriod.get(latest)!;
 
-  return { period: latest, rows };
+  const groups = [...byAxis.entries()]
+    .map(([axis, rows]) => ({ axis, rows: rows.sort((a, b) => b.value - a.value) }))
+    .filter((g) => g.rows.length > 0)
+    .sort((a, b) => b.rows.length - a.rows.length);
+
+  return { period: latest, groups };
 }
 
 export async function fetchXbrlSegmentRows(
   filing: Latest10K,
-): Promise<{ period: string; rows: { label: string; value: number }[] } | null> {
+): Promise<{ period: string; groups: { axis: string; rows: { label: string; value: number }[] }[] } | null> {
   const xmlPath = await instanceDocName(filing.acc, Number(filing.cik), filing.primaryDoc);
   if (!xmlPath) return null;
   const xml = await fetchSecArchive(`${filing.cik}/${filing.acc}/${xmlPath}`).catch(() => "");
