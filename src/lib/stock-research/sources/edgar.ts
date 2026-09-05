@@ -227,10 +227,16 @@ export async function fetchXbrlSegmentRows(
 
 // ---- One-off / unusual items (earnings audit) ----
 
-// Tag names whose names alone suggest a non-recurring item. Deliberately broad
-// — the LLM decides which are genuinely one-off; we only pre-filter noise.
+// Tag names whose names alone suggest a non-recurring item. The LLM decides
+// which of these are genuinely one-off; this pre-filter only bounds the noise.
+// Deliberately EXCLUDED: `gainloss`/`gain loss` — it matches every recurring
+// mark on an investment portfolio (unrealized/realized securities gains), which
+// for holders like Alphabet recurs every period; genuine disposal/settlement
+// one-offs still match via their other word (disposal|settlement|…). Likewise
+// bare `goodwill` matched routine M&A lines (GoodwillAcquiredDuringPeriod) —
+// only impairment is one-off-ish, and bare `legal` matched identifier tags.
 export const ONE_OFF_TAG_RE =
-  /restructuring|impair|write.?down|writedown|goodwill|discontinu|litigation|settlement|severance|exit|disposal|gainloss|gain.?loss|unusual|nonrecurring|non.?recurring|casualty|environmental|legal/i;
+  /restructuring|impair|write.?down|writedown|goodwill.?impair|discontinu|litigation|settlement|severance|exit|disposal|unusual|nonrecurring|non.?recurring|casualty|environmental/i;
 
 // Latest-annual-period consolidated (no dimension) facts matching the filter.
 // Returns raw rows for the audit pipeline — nothing computed here.
@@ -254,6 +260,7 @@ export async function fetchXbrlOneOffFacts(
     const ctx = ctxs.get(f.contextRef);
     if (!ctx || ctx.members.length > 0) continue;
     if (fyEnd && ctx.endDate && ctx.endDate !== fyEnd) continue;
+    if (f.value === 0) continue; // zero-value facts carry no information ("impairment of $0")
     const existing = byLabel.get(f.tag);
     if (!existing || Math.abs(f.value) > Math.abs(existing.value)) {
       byLabel.set(f.tag, { value: f.value, period: ctx.endDate || fyEnd });

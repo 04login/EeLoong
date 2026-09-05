@@ -123,7 +123,10 @@ export async function getEarningsAudit(
   }
 
   const fyEnd = filing.fyEnd;
-  const cacheKey = `audit:${t}:${fyEnd}`;
+  // v2: bumps past results cached before the ONE_OFF_TAG_RE tightening
+  // (recurring securities marks labelled as one-off gains) and the
+  // newest-first 10-K fix (FY2023 data served as "latest").
+  const cacheKey = `audit:v2:${t}:${fyEnd}`;
 
   // 3. Cache hit?
   const cached = await kvGet<AuditResult>(kv, cacheKey);
@@ -162,8 +165,18 @@ export async function getEarningsAudit(
       AUDIT_USER_PROMPT({ period, rows: rawRows }),
     );
     console.log("[stocks:audit] LLM returned:", JSON.stringify(normalized).slice(0, 500));
+    // Provenance guard: the LLM may only RELABEL input facts, never produce
+    // amounts that weren't in the raw rows. Magnitude must match a raw fact
+    // (either sign — `impact` is the direction authority); anything else was
+    // invented and is dropped.
+    const rawMagnitudes = new Set(rawRows.map((r) => Math.abs(r.value)));
     const items = (normalized?.items as LabeledFact[] | undefined)?.filter(
-      (s) => s?.label && Number.isFinite(s?.amount) && (s?.impact === "charge" || s?.impact === "gain"),
+      (s) =>
+        s?.label &&
+        Number.isFinite(s?.amount) &&
+        s.amount !== 0 &&
+        (s?.impact === "charge" || s?.impact === "gain") &&
+        rawMagnitudes.has(Math.abs(s.amount)),
     );
     if (items && items.length > 0) {
       labeled = items;

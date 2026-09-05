@@ -39,9 +39,17 @@ Rules:
   {"items":[{"label":string,"amount":number,"impact":"charge"|"gain"}],"period":string,"summary":string}
 - Include only facts that are genuinely one-off / unusual / non-recurring in
   nature: restructuring, impairments, litigation settlements, discontinued
-  operations, gains/losses on asset sales, write-downs, severance, etc.
-- Omit routine, recurring operating costs even if their tag appears in the
-  input. If nothing qualifies, output an empty "items" array.
+  operations, gains/losses on an asset SALE or disposal, write-downs, severance, etc.
+- EXCLUDE items that recur every period as part of normal operations, even
+  though their names sound unusual: unrealized/realized gains/losses on
+  investment-securities portfolios (equity/debt marks, FVNI/FVTPL/AFS), FX
+  gains/losses, hedging gains/losses — for portfolio-holding companies these
+  RECUR every period.
+- EXCLUDE any fact whose value is 0 — a zero impairment is not an event.
+- If the input contains multiple views of the same underlying item (aggregate
+  plus components, or the same item under several similar tags), include ONE
+  view — the single largest-magnitude one — and omit the rest. Never include
+  both an aggregate and its components.
 - "amount" MUST be copied verbatim from the input value — same sign, same unit,
   no conversion.
 - "impact": "charge" if the item reduced reported earnings, "gain" if it

@@ -61,7 +61,9 @@ export async function getSegments(
   }
 
   const fyEnd = filing.fyEnd;
-  const cacheKey = `segments:${t}:${fyEnd}`;
+  // v2: bumps past any entries cached before the extraction fixes (raw-member
+  // labels pinned when the LLM flaked) and the newest-first 10-K fix.
+  const cacheKey = `segments:v2:${t}:${fyEnd}`;
 
   // 3. Cache hit?
   const cached = await kvGet<SegmentResult>(kv, cacheKey);
@@ -139,7 +141,13 @@ export async function getSegments(
     fyEnd,
   };
 
-  // 6. Cache (months TTL).
-  await kvPut(kv, cacheKey, result, CACHE_TTL.segments);
+  // 6. Cache only normalized results. If the LLM step failed, DON'T cache — a
+  // raw `GoogleServicesMember`-labelled result would otherwise be pinned for
+  // 90 days with no retry; the next request retries the LLM.
+  if (llmOk) {
+    await kvPut(kv, cacheKey, result, CACHE_TTL.segments);
+  } else {
+    console.log("[stocks:segments] LLM not ok — result NOT cached (will retry next request)");
+  }
   return result;
 }
