@@ -80,9 +80,10 @@ export async function latest10K(cikValue: string): Promise<Latest10K | null> {
   const r = json?.filings?.recent;
   if (!r) return null;
 
-  // Walk backwards to the most recent 10-K (recent is newest-first… enforce by
-  // scanning backwards robustly: pick the LAST 10-K in the array).
-  for (let i = r.form.length - 1; i >= 0; i--) {
+  // `recent` is NEWEST-FIRST — the most recent 10-K is the FIRST match, not
+  // the last. (Scanning backwards silently returned the oldest 10-K in the
+  // 1000-filing window, i.e. FY2023 instead of FY2025 for Alphabet.)
+  for (let i = 0; i < r.form.length; i++) {
     if (r.form[i] === "10-K") {
       const acc = (r.accessionNumber[i] ?? "").replace(/-/g, "");
       return {
