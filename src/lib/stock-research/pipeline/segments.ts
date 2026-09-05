@@ -55,12 +55,23 @@ const AXIS_LABELS: [RegExp, string][] = [
   [/Geograph/i, "By geography"],
   [/Channel|Distribution/i, "By sales channel"],
   [/Customer|Concentration/i, "By customer type"],
+  [/Subsegments?/i, "By insurance sub-segment"],
   [/Revenue|Sales/i, "By revenue type"],
   [/Service$/i, "By service type"],
 ];
 
 const axisLabelFor = (axis: string): string =>
   AXIS_LABELS.find(([re]) => re.test(axis))?.[1] ?? "Other breakdown";
+
+// Code-first prettifier for XBRL member names — keeps the raw (pre-LLM)
+// fallback readable: "InsuranceAndOtherMember" → "Insurance And Other",
+// "GeicoMember" → "Geico", "US" → "US".
+const prettifyMember = (label: string): string =>
+  label
+    .replace(/Member$/, "")
+    .replace(/(?<=[a-z0-9])(?=[A-Z])/g, " ")
+    .replace(/(?<=[A-Z])(?=[A-Z][a-z])/g, " ")
+    .trim();
 
 export async function getSegments(
   env: LlmEnv,
@@ -107,7 +118,7 @@ export async function getSegments(
     if (xbrl && xbrl.groups.length > 0) {
       groups = xbrl.groups.map((g) => ({
         axisLabel: axisLabelFor(g.axis),
-        rows: g.rows.map((r) => ({ label: r.label, revenue: r.value })),
+        rows: g.rows.map((r) => ({ label: prettifyMember(r.label), revenue: r.value })),
       }));
       period = xbrl.period || fyEnd;
       source = "xbrl";
