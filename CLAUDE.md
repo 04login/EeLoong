@@ -65,17 +65,20 @@ Both pages carry `export const prerender = false` — explicit but redundant (`o
 
 ### Implementation facts (learned in the build — don't re-derive)
 - **EDGAR `companyfacts` / `companyconcept` strip ALL dimensional (segment) data** — zero `segment:` keys even for AAPL/MSFT/KO, so the plan's stated source was wrong. Segment extraction instead works directly off the **raw 10-K XBRL instance XML** (`edgar.ts`: parse `<context>` blocks for segment/product members + numeric revenue facts), with a fallback to the **rendered HTML note** (find the segment/revenue `R*.htm` via `FilingSummary.xml`, extract `<table>`s) for large filers like Apple that only tag the aggregate. The LLM normalizes both paths; it never invents numbers.
-- **Yahoo**: `v8/finance/chart` + `v1/finance/search` are keyless. `v10/finance/quoteSummary` is **crumb-gated**: grab the A3 cookie from `fc.yahoo.com` (404 is expected — the Set-Cookie matters), trade it at `v1/test/getcrumb`, send `&crumb=` on the quoteSummary call, with one 401 retry. `fetchQuote` merges chart meta + quoteSummary.
+- **XBRL gotchas (each broke the pipeline once — don't regress)**:
+  - Namespace prefixes contain hyphens (`us-gaap`) — the fact regex must use `[\w.-]+` for the prefix, and a closing-tag backreference `\1:\2` (a `[A-Za-z0-9_]+` prefix class matched only 192/1418 facts; the us-gaap facts — all segment revenue and nearly all one-off tags — were silently dropped).
+  - `instanceDocName` must exclude `FilingSummary.xml` (it's the first `.xml` in every folder listing, not the instance) and handle the `_htm.xml` inline-XBRL naming (`goog-20231231_htm.xml`).
+  - `FilingSummary.xml` reports are `<Report …>` **with attributes** and the category tag is **`<MenuCategory>`** — `<Report>` exact-match and `<category>` both parse zero reports.
+- **Yahoo**: `v8/finance/chart` + `v1/finance/search` are keyless. `v10/finance/quoteSummary` is **crumb-gated**: grab the A3 cookie from `fc.yahoo.com` (404 is expected — the Set-Cookie matters), trade it at `v1/test/getcrumb`, send `&crumb=` on the quoteSummary call, with one 401 retry. `fetchQuote` merges chart meta + quoteSummary. Field gotchas: `bookValue`/`forwardEps` live in **`defaultKeyStatistics`** (`price.bookValue` doesn't exist); **changePercent units differ** — chart meta is in percent (−1.11 = −1.11%), quoteSummary in fraction (−0.0111) — normalize to fraction before formatting. Yahoo search often returns **GOOG before GOOGL** for "Alphabet Inc." — both are in `PEER_GROUPS`.
 - **LLM client** (`llm/client.ts`): plain-fetch rotation **Gemini → Groq → OpenRouter**, hard 10 s timeout, Gemini `responseMimeType: application/json`, temperature 0. Models: `gemini-2.5-flash` (primary), `llama-3.3-70b-versatile` (Groq), `qwen/qwen-2.5-72b-instruct` (OpenRouter). Missing key → provider skipped; all providers fail → throw, callers render "unavailable".
 - **Cache** (`cache/kv.ts`): keys prefixed `stock-research:`. Actual keys: `ticker-cik-map` (2-week TTL), `segments:{ticker}:{fyEnd}` / `audit:{ticker}:{fyEnd}` (90-day TTL) where `fyEnd` is the 10-K `reportDate`. Cached value is the **filtered/normalized** payload, never raw multi-MB filings.
 - **Market gating**: `quote.market` derives from ticker suffix (`.SI` = SGP, else US). Segments + audit run only for US (needs a CIK); SGX/HK tickers get fundamentals + (if curated) peers. Every section degrades to an explicit "not available for this company" placeholder — no thrown page errors.
 - **Peers / fair value**: hand-curated `PEER_GROUPS` in `config.ts` (incl. SGX banks `D05.SI`/`O39.SI`/`U11.SI`); only tickers in a group get the panels. Fair value = peer-average PE × EPS ± 20% band. Gotcha: SGX tickers as object keys **must be quoted** (`"D05.SI": […]`) — unquoted dots broke the build.
 
 ### LLM provider decision (why)
-**LiteLLM provider rotation** — matched to the carousell bot (Gemini → Groq → Qwen with graceful fallback), NOT the Anthropic API:
-- LiteLLM has **no node/worker package** — implemented directly in `llm/client.ts` with plain `fetch` (Gemini generated-content API; Groq + OpenRouter are OpenAI-compatible `chat/completions`).
-- Keys as Worker secrets: `GEMINI_API_KEY` (primary), optional `GROQ_API_KEY`, `OPENROUTER_API_KEY`. Local dev via `.dev.vars`.
-- Model floor: **Gemini Flash tier minimum** for segment grouping / one-off classification — not the cheapest Groq tier.
+**OpenRouter single provider** (streamlined from the earlier Gemini → Groq → OpenRouter rotation in commit c99a4a4) — the carousell bot keeps its own LiteLLM rotation; the stocks tool does not:
+- `llm/client.ts` calls OpenRouter's **`openrouter/free`** router model via plain `fetch` (OpenAI-compatible `chat/completions`) with `response_format: { type: "json_object" }` and temperature 0. The router picks a free model per request — the router IS the fallback.
+- Key as Worker secret: `OPENROUTER_API_KEY` (the only key this tool reads now). Local dev via `.dev.vars`. Missing/empty key → throw; callers render "unavailable".
 - LLM step shape: ONE structured-output call, hard ~10 s timeout, panel renders "unavailable" on failure. LLM runs only on first view of a (ticker, filing-period) combo — KV-cached afterwards.
 - SEC compliance: descriptive User-Agent with real contact on every EDGAR request (`SEC_USER_AGENT` in `config.ts`).
 
@@ -84,7 +87,7 @@ Stock tool UI uses the site Tailwind design system (ink/paper/accent) via `Ratio
 
 ### Remaining work
 1. **Replace Valuation Desk** (plan's step 2, still open): delete `src/pages/projects/valuation.astro`; update `src/data/profile.ts` entry #6 (title/description/technologies/link → `/projects/stocks`).
-2. **Deploy prep**: real KV IDs (`npx wrangler kv namespace create STOCK_CACHE`) → `wrangler.toml`; set Worker secrets `GEMINI_API_KEY` (+ optional `GROQ_API_KEY`, `OPENROUTER_API_KEY`).
+2. **Deploy prep**: real KV IDs (`npx wrangler kv namespace create STOCK_CACHE`) → `wrangler.toml`; set Worker secret `OPENROUTER_API_KEY`.
 3. **Phase 5 (future)**: SG (`.SI`) segment support via annual-report PDF extraction — same filter → LLM → cache shape as EDGAR, different source (SGXNet / company PDFs, no public structured API).
 
 ### Pipeline order (`[ticker].astro`, per request)
@@ -105,4 +108,4 @@ Code-first filter pass on EDGAR facts (segment-axis tags / one-off indicators); 
 ## Secrets (never commit)
 
 - Carousell: `DB` D1 + LiteLLM keys (project side).
-- Stock tool: LLM keys `GEMINI_API_KEY` (primary), optional `GROQ_API_KEY`, `OPENROUTER_API_KEY` — present in `.dev.vars` for local dev; must be set as Cloudflare Worker secrets before first remote deploy. SEC `User-Agent` lives in `config.ts` (`SEC_USER_AGENT`), not as a secret.
+- Stock tool: LLM key `OPENROUTER_API_KEY` (the only LLM secret this tool reads) — present in `.dev.vars` for local dev (currently **empty** — set a real key to enable the audit panel); must be set as a Cloudflare Worker secret before first remote deploy. SEC `User-Agent` lives in `config.ts` (`SEC_USER_AGENT`), not as a secret.

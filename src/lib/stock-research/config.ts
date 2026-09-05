@@ -35,6 +35,7 @@ export const PEER_GROUPS: Record<string, string[]> = {
   AAPL: ["MSFT", "GOOGL", "META", "HPQ"],
   MSFT: ["AAPL", "GOOGL", "ORCL", "CRM"],
   GOOGL: ["MSFT", "META", "AAPL"],
+  GOOG: ["MSFT", "META", "AAPL"], // Alphabet's Class C — Yahoo search often hits GOOG before GOOGL
   META: ["GOOGL", "SNAP", "PINS"],
   AMZN: ["WMT", "BABA", "EBAY"],
   NVDA: ["AMD", "INTC", "AVGO", "QCOM"],

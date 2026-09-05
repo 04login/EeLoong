@@ -113,9 +113,17 @@ async function instanceDocName(acc: string, cikInt: number, primaryDoc: string):
   const list = await fetchSecArchive(`${cikInt}/${acc}/`).catch(() => "");
   if (!list) return null;
   const matches = [...list.matchAll(/href="[^"]*?([^/"]+\.xml)"/g)].map((m) => m[1]);
-  const instance = matches.find((f) => !/_cal|_def|_lab|_pre/.test(f));
-  // Fallback: derive from primary doc name pattern `{co}-{date}.htm` → .xml.
-  return instance ?? (primaryDoc.replace(/\.\w+$/, "") + ".xml");
+  // FilingSummary.xml is the first .xml in every folder listing and is NOT the
+  // instance document — exclude it explicitly (plus the calc/def/lab/pre
+  // linkbase files and the viewer's htmlviewer xml).
+  const instance = matches.find(
+    (f) => !/_cal|_def|_lab|_pre|FilingSummary|htmlviewer/i.test(f),
+  );
+  if (instance) return instance;
+  // Fallback: derive from primary doc name — `{co}-{date}.htm` → `{co}-{date}_htm.xml`
+  // (inline XBRL instances are conventionally `{base}_htm.xml`), then bare `{base}.xml`.
+  const base = primaryDoc.replace(/\.\w+$/, "");
+  return `${base}_htm.xml`;
 }
 
 export function parseXbrlContexts(xml: string): Map<string, { members: XbrlMember[]; endDate: string }> {
@@ -139,10 +147,13 @@ export function parseXbrlContexts(xml: string): Map<string, { members: XbrlMembe
 
 export function parseXbrlNumericFacts(xml: string, tagFilter?: RegExp): XbrlRevenueFact[] {
   // Matches `<prefix:Tag contextRef="...">123</prefix:Tag>` numeric facts.
+  // Prefixes may contain hyphens/dots (`us-gaap`, `srt`, `iso4217`) — a
+  // `[A-Za-z0-9_]+` prefix class silently drops every us-gaap fact. The closing
+  // tag is a backreference `\1:\2` so a match can't span across facts.
   // Without a tagFilter, only revenue-ish tags are kept (segment pipeline);
   // with one, the caller picks its own tag family (one-off audit).
   const facts: XbrlRevenueFact[] = [];
-  const re = /<([A-Za-z0-9_]+):([A-Za-z0-9_]+)\b[^>]*contextRef="([^"]+)"[^>]*>(-?[0-9]+(?:\.[0-9]+)?)<\/[A-Za-z0-9_]+:[A-Za-z0-9_]+>/g;
+  const re = /<([\w.-]+):([\w.-]+)\b[^>]*contextRef="([^"]+)"[^>]*>(-?[0-9]+(?:\.[0-9]+)?)<\/\1:\2>/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(xml))) {
     const tag = m[2];
@@ -261,10 +272,12 @@ async function segmentNoteHref(filing: Latest10K): Promise<string | null> {
   const summary = await fetchSecArchive(`${filing.cik}/${filing.acc}/FilingSummary.xml`).catch(() => "");
   if (!summary) return null;
 
-  const notes = [...summary.matchAll(/<Report>([\s\S]*?)<\/Report>/g)].map((m) => m[1]);
+  // Report elements carry attributes (`<Report instance="...">`), so the open
+  // tag must tolerate them; MenuCategory is the actual tag name (not <category>).
+  const notes = [...summary.matchAll(/<Report\b[^>]*>([\s\S]*?)<\/Report>/g)].map((m) => m[1]);
   const htmlRe = /<HtmlFileName>([^<]+)<\/HtmlFileName>/;
   const nameRe = /<ShortName>([^<]+)<\/ShortName>/i;
-  const categoryRe = /<category>([^<]+)<\/category>/i;
+  const categoryRe = /<MenuCategory>([^<]+)<\/MenuCategory>/i;
 
   let best: { file: string; rank: number } | null = null;
   for (const note of notes) {

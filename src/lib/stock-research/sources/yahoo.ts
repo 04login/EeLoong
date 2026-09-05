@@ -41,6 +41,17 @@ const parseStr = (v: unknown): string | null => {
   return null;
 };
 
+// Chart meta reports changePercent in percent units (-1.11 means -1.11%);
+// quoteSummary reports a fraction (-0.0111). Whichever source wins must come
+// out as a fraction — the UI multiplies by 100 to format.
+function changePercentAsFraction(
+  fromChart: number | null,
+  fromSummary: number | null,
+): number | null {
+  if (fromChart !== null) return fromChart / 100;
+  return fromSummary;
+}
+
 function detectMarket(symbol: string): TickerQuote["market"] {
   const upper = symbol.toUpperCase();
   if (upper.endsWith(".SI")) return "SGP";
@@ -190,7 +201,10 @@ export async function fetchQuote(symbol: string): Promise<TickerQuote | null> {
     previousClose: parseNum(meta.chartPreviousClose),
     change: parseNum(meta.regularMarketChange) ?? parseNum(price.regularMarketChange),
     changePercent:
-      parseNum(meta.regularMarketChangePercent) ?? parseNum(price.regularMarketChangePercent),
+      changePercentAsFraction(
+        parseNum(meta.regularMarketChangePercent),
+        parseNum(price.regularMarketChangePercent),
+      ),
     dayLow: parseNum(meta.regularMarketDayLow) ?? parseNum(summary.regularMarketDayLow) ?? parseNum(summary.dayLow),
     dayHigh: parseNum(meta.regularMarketDayHigh) ?? parseNum(summary.regularMarketDayHigh) ?? parseNum(summary.dayHigh),
     fiftyTwoWeekLow: parseNum(meta.fiftyTwoWeekLow) ?? parseNum(summary.fiftyTwoWeekLow),
@@ -201,12 +215,12 @@ export async function fetchQuote(symbol: string): Promise<TickerQuote | null> {
     trailingPE: parseNum(summary.trailingPE) ?? parseNum(stats.trailingPE),
     forwardPE: parseNum(summary.forwardPE) ?? parseNum(stats.forwardPE),
     priceToSalesTrailing12Months: parseNum(summary.priceToSalesTrailing12Months),
-    priceToBook: parseNum(price.bookValue) && parseNum(price.regularMarketPrice)
-      ? (parseNum(price.regularMarketPrice)! / parseNum(price.bookValue)!)
+    priceToBook: parseNum(stats.bookValue) && parseNum(price.regularMarketPrice)
+      ? (parseNum(price.regularMarketPrice)! / parseNum(stats.bookValue)!)
       : null,
     pegRatio: parseNum(summary.pegRatio) ?? parseNum(stats.pegRatio),
     epsTrailingTwelveMonths: parseNum(fin.epsTrailingTwelveMonths) ?? parseNum(stats.trailingEps),
-    epsForward: parseNum(fin.epsForward),
+    epsForward: parseNum(fin.epsForward) ?? parseNum(stats.forwardEps),
     revenueTrailingTwelveMonths: parseNum(fin.totalRevenue) ?? null,
     grossProfitTrailingTwelveMonths: parseNum(fin.grossProfits) ?? null,
     earningsGrowth: parseNum(fin.earningsGrowth),
