@@ -56,17 +56,24 @@ function fetchSecArchive(path: string): Promise<string> {
 
 // ---- filing discovery ----
 
-export type Latest10K = {
+export type LatestFiling = {
   cik: string;
   accession: string; // with dashes
   acc: string; // without dashes (for URL building)
   primaryDoc: string;
-  fyEnd: string; // fiscal year end date (reportDate)
+  periodEnd: string; // reportDate — FY end for a 10-K, quarter end for a 10-Q
   fy: number;
 };
 
+// Most recent periodic filing — 10-Q when it's newer, else the 10-K (user
+// decision: "10-Q if available, then 10-K"). `filings.recent` is NEWEST-FIRST
+// (scanning backwards once returned the *oldest* 10-K in the window — silent,
+// plausible-looking, wrong), but rather than trusting list order outright we
+// scan the whole window and keep the max reportDate: odd fiscal calendars can
+// file a newer-dated 10-Q after an older-period 10-K. Amendments (10-K/A,
+// 10-Q/A) are ignored — exact form match.
 // `cik` is a 10-digit zero-padded string (or a number-coercible int).
-export async function latest10K(cikValue: string): Promise<Latest10K | null> {
+export async function latestPeriodic(cikValue: string): Promise<LatestFiling | null> {
   const cikInt = Number(cikValue.replace(/\D/g, "")).toString();
   const body = await fetchSecText(`${DATA_BASE}/submissions/CIK${cikInt.padStart(10, "0")}.json`).catch(() => "");
   if (!body) return null;
@@ -80,23 +87,22 @@ export async function latest10K(cikValue: string): Promise<Latest10K | null> {
   const r = json?.filings?.recent;
   if (!r) return null;
 
-  // `recent` is NEWEST-FIRST — the most recent 10-K is the FIRST match, not
-  // the last. (Scanning backwards silently returned the oldest 10-K in the
-  // 1000-filing window, i.e. FY2023 instead of FY2025 for Alphabet.)
+  let best: LatestFiling | null = null;
   for (let i = 0; i < r.form.length; i++) {
-    if (r.form[i] === "10-K") {
-      const acc = (r.accessionNumber[i] ?? "").replace(/-/g, "");
-      return {
-        cik: cikInt,
-        accession: r.accessionNumber[i] ?? "",
-        acc,
-        primaryDoc: r.primaryDocument[i] ?? "",
-        fyEnd: r.reportDate[i] ?? "",
-        fy: r.fiscalYearEnd?.[i] ?? 0,
-      };
-    }
+    if (r.form[i] !== "10-K" && r.form[i] !== "10-Q") continue;
+    const reportDate: string = r.reportDate?.[i] ?? "";
+    if (!reportDate) continue;
+    if (best && reportDate <= best.periodEnd) continue;
+    best = {
+      cik: cikInt,
+      accession: r.accessionNumber[i] ?? "",
+      acc: (r.accessionNumber[i] ?? "").replace(/-/g, ""),
+      primaryDoc: r.primaryDocument[i] ?? "",
+      periodEnd: reportDate,
+      fy: r.fiscalYearEnd?.[i] ?? 0,
+    };
   }
-  return null;
+  return best;
 }
 
 // ---- XBRL instance: contexts, members, revenue facts ----
@@ -233,7 +239,7 @@ export function xbrlSegmentsToRows(
 }
 
 export async function fetchXbrlSegmentRows(
-  filing: Latest10K,
+  filing: LatestFiling,
 ): Promise<{ period: string; groups: { axis: string; rows: { label: string; value: number }[] }[] } | null> {
   const xmlPath = await instanceDocName(filing.acc, Number(filing.cik), filing.primaryDoc);
   if (!xmlPath) return null;
@@ -260,7 +266,7 @@ export const ONE_OFF_TAG_RE =
 // Latest-annual-period consolidated (no dimension) facts matching the filter.
 // Returns raw rows for the audit pipeline — nothing computed here.
 export async function fetchXbrlOneOffFacts(
-  filing: Latest10K,
+  filing: LatestFiling,
 ): Promise<{ period: string; rows: { label: string; value: number }[] } | null> {
   const xmlPath = await instanceDocName(filing.acc, Number(filing.cik), filing.primaryDoc);
   if (!xmlPath) return null;
@@ -295,7 +301,7 @@ export async function fetchXbrlOneOffFacts(
 
 // Fetch FilingSummary.xml, find the R-file whose short name is the segment
 // reporting note (fallback: revenue / net sales note).
-async function segmentNoteHref(filing: Latest10K): Promise<string | null> {
+async function segmentNoteHref(filing: LatestFiling): Promise<string | null> {
   const summary = await fetchSecArchive(`${filing.cik}/${filing.acc}/FilingSummary.xml`).catch(() => "");
   if (!summary) return null;
 
@@ -353,7 +359,7 @@ function isSegmentTable(rows: string[]): boolean {
   return numbers.length >= 3;
 }
 
-export async function fetchHtmlSegmentTables(filing: Latest10K): Promise<string[][] | null> {
+export async function fetchHtmlSegmentTables(filing: LatestFiling): Promise<string[][] | null> {
   const note = await segmentNoteHref(filing);
   if (!note) return null;
   const html = await fetchSecArchive(`${filing.cik}/${filing.acc}/${note}`).catch(() => "");

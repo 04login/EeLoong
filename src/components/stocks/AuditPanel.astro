@@ -34,7 +34,7 @@ const { audit } = Astro.props;
 				))}
 			</div>
 
-			<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+			<div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
 				<RatioTile label="Reported EPS" value={formatNumber(audit.reportedEps, 2)} />
 				<RatioTile
 					label="Adjusted EPS"
@@ -46,6 +46,12 @@ const { audit } = Astro.props;
 					label="Adjusted P/E"
 					value={audit.adjustedPe !== null ? audit.adjustedPe.toFixed(2) : "—"}
 					colorClass={audit.adjustedPe !== null ? "text-[color:var(--accent)]" : "text-[color:var(--paper-muted)]"}
+				/>
+				<RatioTile label="Reported PEG" value={audit.reportedPeg !== null ? audit.reportedPeg.toFixed(2) : "—"} />
+				<RatioTile
+					label="Adjusted PEG"
+					value={audit.adjustedPeg !== null ? audit.adjustedPeg.toFixed(2) : "—"}
+					colorClass={audit.adjustedPeg !== null ? "text-[color:var(--accent)]" : "text-[color:var(--paper-muted)]"}
 				/>
 			</div>
 		</>

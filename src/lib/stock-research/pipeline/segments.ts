@@ -1,24 +1,30 @@
 // Segment revenue breakdown — orchestrator.
 //
-// Flow (user decision: "XBRL first, HTML fallback"):
+// Flow (user decision: "XBRL first, HTML fallback" + "10-Q when newer, else 10-K"):
 //   1. Resolve ticker → CIK (cik-map.ts, KV-cached).
-//   2. Find the latest 10-K (edgar.ts).
+//   2. Find the latest periodic filing (edgar.ts: 10-Q if newer than the 10-K).
 //   3. Try XBRL instance: parse for revenue facts with a segment/product
 //      dimension → raw rows grouped by dimension axis.
 //   4. Fall back to HTML: find the segment/revenue note's R*.htm, extract
 //      tables → raw rows (single ungrouped slice).
 //   5. LLM groups/labels/normalizes the raw rows → clean JSON.
-//   6. Cache result under `segments:v2:{ticker}:{fyEnd}` (months TTL).
+//   6. Cache result under `segments:v2:{ticker}:{periodEnd}` (months TTL).
 //
 // Nothing here invents numbers. If any step fails the whole panel returns null
 // and the UI renders "not available for this company".
+//
+// 10-Q note: a quarterly filing tags both the quarter and the year-to-date
+// window ending the same day; the extractor's largest-magnitude rule keeps the
+// YTD slice, so a Q2 filing shows H1 revenue labelled with the quarter-end
+// date — a different window than the 10-K's full year. The period is shown on
+// the panel, so the slice is honest about what it covers.
 
 import type { KVNamespace } from "@cloudflare/workers-types/2023-03-03";
 import { CACHE_TTL } from "../config.ts";
 import { kvGet, kvPut } from "../cache/kv.ts";
 import { tickerToCik } from "../sources/cik-map.ts";
 import {
-  latest10K,
+  latestPeriodic,
   fetchXbrlSegmentRows,
   fetchHtmlSegmentTables,
 } from "../sources/edgar.ts";
@@ -42,7 +48,7 @@ export type SegmentGroup = {
 export type SegmentResult = {
   ticker: string;
   groups: SegmentGroup[];
-  period: string; // fiscal period end date
+  period: string; // fiscal period end date (FY end for a 10-K, quarter end for a 10-Q)
   source: "xbrl" | "html" | "llm" | "none";
   sourceSummary: string | null;
   fyEnd: string;
@@ -87,17 +93,19 @@ export async function getSegments(
     return null;
   }
 
-  // 2. Latest 10-K.
-  const filing = await latest10K(cikInfo.cik);
+  // 2. Latest periodic filing — 10-Q if it's newer than the 10-K (user
+  // decision), so a freshly-filed quarter supersedes last year's annual data.
+  const filing = await latestPeriodic(cikInfo.cik);
   if (!filing) {
-    console.log("[stocks:segments] no 10-K found for CIK", cikInfo.cik);
+    console.log("[stocks:segments] no periodic filing found for CIK", cikInfo.cik);
     return null;
   }
 
-  const fyEnd = filing.fyEnd;
-  // v2: bumps past entries cached before the axis-grouping change (flat rows
-  // double-counted Apple-style multi-axis filers); old keys expire unused.
-  const cacheKey = `segments:v2:${t}:${fyEnd}`;
+  const fyEnd = filing.periodEnd;
+  // v3: bumps past entries cached when the source was 10-K-only — a 10-Q's
+  // YTD slice must not collide with the 10-K's full-year key for the same
+  // ticker (and pre-v3 10-K entries stay valid but are superseded on refetch).
+  const cacheKey = `segments:v3:${t}:${fyEnd}`;
 
   // 3. Cache hit?
   const cached = await kvGet<SegmentResult>(kv, cacheKey);
@@ -122,7 +130,7 @@ export async function getSegments(
       }));
       period = xbrl.period || fyEnd;
       source = "xbrl";
-      sourceSummary = "10-K XBRL instance — revenue facts grouped by disclosure axis";
+      sourceSummary = "Periodic filing XBRL instance — revenue facts grouped by disclosure axis";
     }
   } catch (e) {
     console.error("[stocks:segments] XBRL fetch threw:", e);
@@ -147,7 +155,7 @@ export async function getSegments(
         ];
         period = fyEnd;
         source = "html";
-        sourceSummary = "10-K financial-statement HTML — segment reporting note";
+        sourceSummary = "Periodic filing financial-statement HTML — segment note";
       }
     } catch {
       // no segment data

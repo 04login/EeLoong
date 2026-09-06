@@ -2,8 +2,8 @@
 //
 // Flow (mirrors segments.ts):
 //   1. Resolve ticker → CIK (cik-map.ts, KV-cached).
-//   2. Find the latest 10-K (edgar.ts).
-//   3. KV cache `audit:{ticker}:{fyEnd}` (months TTL).
+//   2. Find the latest periodic filing (edgar.ts: 10-Q if newer than the 10-K).
+//   3. KV cache `audit:v3:{ticker}:{periodEnd}` (months TTL).
 //   4. Extract raw one-off-tagged facts from the XBRL instance.
 //   5. LLM decides which are genuinely one-off and labels them (charge/gain).
 //   6. If usable: recompute adjusted EPS/PE — the arithmetic is done in code
@@ -13,12 +13,18 @@
 // Honesty rules: the LLM never computes numbers. If the LLM is unavailable the
 // result is null (no fake audit). Adjustment is only meaningful when we have
 // reported EPS and market cap from Yahoo (market cap / price ⇒ share count).
+//
+// 10-Q note: one-off items come from the year-to-date window (the extractor
+// keeps the largest-magnitude fact per tag for the period), and the adjustment
+// subtracts them from Yahoo's trailing-twelve-month EPS — an approximation that
+// is slightly looser for a partial year than for the 10-K's full year. The
+// audit's period line shows which filing was used.
 
 import type { KVNamespace } from "@cloudflare/workers-types/2023-03-03";
 import { CACHE_TTL } from "../config.ts";
 import { kvGet, kvPut } from "../cache/kv.ts";
 import { tickerToCik } from "../sources/cik-map.ts";
-import { latest10K, fetchXbrlOneOffFacts } from "../sources/edgar.ts";
+import { latestPeriodic, fetchXbrlOneOffFacts } from "../sources/edgar.ts";
 import { llmStructured, type LlmEnv } from "../llm/client.ts";
 import { AUDIT_SYSTEM_PROMPT, AUDIT_USER_PROMPT } from "../llm/prompts.ts";
 import type { TickerQuote } from "../types.ts";
@@ -37,6 +43,8 @@ export type AuditResult = {
   adjustedEps: number | null;
   reportedPe: number | null;
   adjustedPe: number | null;
+  reportedPeg: number | null;
+  adjustedPeg: number | null;
   summary: string | null;
   source: "xbrl+llm" | "llm" | "none";
 };
@@ -55,10 +63,24 @@ function netOneOffEffect(items: LabeledFact[]): number {
   return sum;
 }
 
+// Yahoo's growth rate (a fraction), usable for PEG only when positive —
+// zero/negative growth makes PEG meaningless. Same field the fundamentals
+// PEG fallback uses.
+function growthOf(quote: TickerQuote): number | null {
+  const g = quote.earningsGrowth;
+  return typeof g === "number" && isFinite(g) && g > 0 ? g : null;
+}
+
+// PEG = P/E ÷ growth%.
+function pegFor(pe: number | null, growth: number | null): number | null {
+  if (pe === null || pe <= 0 || growth === null) return null;
+  return pe / (growth * 100);
+}
+
 // Adjusted EPS = reported EPS − (net one-off effect / share count), where
 // share count = market cap / price. Adjusted PE = price / adjusted EPS
-// (only when adjusted EPS > 0). Returns nulls where inputs are missing —
-// never fabricates.
+// (only when adjusted EPS > 0); PEG pairs each P/E with Yahoo's growth.
+// Returns nulls where inputs are missing — never fabricates.
 function computeAdjustment(
   quote: TickerQuote,
   items: LabeledFact[],
@@ -67,6 +89,8 @@ function computeAdjustment(
   adjustedEps: number | null;
   reportedPe: number | null;
   adjustedPe: number | null;
+  reportedPeg: number | null;
+  adjustedPeg: number | null;
 } {
   const reportedEps =
     typeof quote.epsTrailingTwelveMonths === "number" && isFinite(quote.epsTrailingTwelveMonths)
@@ -77,27 +101,30 @@ function computeAdjustment(
     typeof quote.trailingPE === "number" && isFinite(quote.trailingPE) && quote.trailingPE > 0
       ? quote.trailingPE
       : null;
+  const growth = growthOf(quote);
+  const reportedPeg = pegFor(reportedPe, growth);
 
   if (reportedEps === null || price === null || price <= 0) {
-    return { reportedEps, adjustedEps: null, reportedPe, adjustedPe: null };
+    return { reportedEps, adjustedEps: null, reportedPe, adjustedPe: null, reportedPeg, adjustedPeg: null };
   }
 
   // Loss-making: a simple EPS delta is not meaningful.
   if (reportedEps <= 0) {
-    return { reportedEps, adjustedEps: null, reportedPe: null, adjustedPe: null };
+    return { reportedEps, adjustedEps: null, reportedPe: null, adjustedPe: null, reportedPeg: null, adjustedPeg: null };
   }
 
   const shares =
     quote.marketCap && quote.marketCap > 0 ? quote.marketCap / price : null;
   if (shares === null || !isFinite(shares) || shares <= 0) {
-    return { reportedEps, adjustedEps: null, reportedPe, adjustedPe: null };
+    return { reportedEps, adjustedEps: null, reportedPe, adjustedPe: null, reportedPeg, adjustedPeg: null };
   }
 
   const epsDelta = netOneOffEffect(items) / shares;
   const adjustedEps = reportedEps - epsDelta;
   const adjustedPe = adjustedEps > 0 ? price / adjustedEps : null;
+  const adjustedPeg = pegFor(adjustedPe, growth);
 
-  return { reportedEps, adjustedEps, reportedPe, adjustedPe };
+  return { reportedEps, adjustedEps, reportedPe, adjustedPe, reportedPeg, adjustedPeg };
 }
 
 export async function getEarningsAudit(
@@ -115,18 +142,19 @@ export async function getEarningsAudit(
     return null;
   }
 
-  // 2. Latest 10-K.
-  const filing = await latest10K(cikInfo.cik);
+  // 2. Latest periodic filing — 10-Q if newer, else 10-K (mirrors segments).
+  const filing = await latestPeriodic(cikInfo.cik);
   if (!filing) {
-    console.log("[stocks:audit] no 10-K for CIK", cikInfo.cik);
+    console.log("[stocks:audit] no periodic filing for CIK", cikInfo.cik);
     return null;
   }
 
-  const fyEnd = filing.fyEnd;
-  // v2: bumps past results cached before the ONE_OFF_TAG_RE tightening
-  // (recurring securities marks labelled as one-off gains) and the
-  // newest-first 10-K fix (FY2023 data served as "latest").
-  const cacheKey = `audit:v2:${t}:${fyEnd}`;
+  const fyEnd = filing.periodEnd;
+  // v3: bumps past results cached when the source was 10-K-only — a 10-Q's
+  // YTD one-off window must not collide with the 10-K's full-year key for the
+  // same ticker (also orphans everything cached before the audit-quality
+  // guardrails and the newest-first filing fix).
+  const cacheKey = `audit:v3:${t}:${fyEnd}`;
 
   // 3. Cache hit?
   const cached = await kvGet<AuditResult>(kv, cacheKey);
@@ -191,7 +219,19 @@ export async function getEarningsAudit(
   const foundItems = labeled.length > 0;
   const adj = foundItems
     ? computeAdjustment(quote, labeled)
-    : { reportedEps: quote.epsTrailingTwelveMonths ?? null, adjustedEps: null, reportedPe: quote.trailingPE ?? null, adjustedPe: null };
+    : {
+        reportedEps: quote.epsTrailingTwelveMonths ?? null,
+        adjustedEps: null,
+        reportedPe: quote.trailingPE ?? null,
+        adjustedPe: null,
+        reportedPeg: pegFor(
+          typeof quote.trailingPE === "number" && isFinite(quote.trailingPE) && quote.trailingPE > 0
+            ? quote.trailingPE
+            : null,
+          growthOf(quote),
+        ),
+        adjustedPeg: null,
+      };
 
   const result: AuditResult = {
     ticker: t,
