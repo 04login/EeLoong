@@ -76,6 +76,12 @@ export async function llmStructured(
         ],
         temperature: 0,
         response_format: { type: "json_object" },
+        // Label/normalize jobs need no chain-of-thought, but the free router
+        // sometimes hands the request to a reasoning model (minimax-m2.7
+        // burned ~2.3k reasoning tokens on a segment-labeling call) — pure
+        // added latency, and enough to blow the timeout. Ignored by models
+        // that don't support the parameter.
+        reasoning: { enabled: false },
       }),
       signal: ctrl.signal,
     });

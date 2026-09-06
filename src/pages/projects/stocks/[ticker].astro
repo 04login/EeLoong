@@ -315,20 +315,30 @@ if (quote) {
 	<script>
 		// Async panels: replace the two spinner cards with the /panel fragment
 		// (segment revenue + earnings audit, run server-side after first paint).
-		// Fire-and-forget — the page is fully usable without it.
+		// Fire-and-forget — the page is fully usable without it. A timeout keeps
+		// a hung LLM call from spinning forever; it can't just hide the spinners,
+		// because a timed-out request often DID populate the KV cache server-side
+		// — a refresh then loads instantly from cache.
 		const host = document.getElementById("stock-panels");
 		const tickerParam = host?.dataset.ticker;
 		if (host && tickerParam) {
-			fetch(`/projects/stocks/${tickerParam}/panel`, { headers: { Accept: "text/html" } })
+			const ctrl = new AbortController();
+			const timer = setTimeout(() => ctrl.abort(), 75_000);
+			fetch(`/projects/stocks/${tickerParam}/panel`, { headers: { Accept: "text/html" }, signal: ctrl.signal })
 				.then((res) => (res.ok ? res.text() : Promise.reject(new Error(String(res.status)))))
 				.then((html) => {
+					clearTimeout(timer);
 					host.innerHTML = html;
 				})
 				.catch(() => {
+					clearTimeout(timer);
 					host.innerHTML = `
 						<div class="bg-[color:var(--ink-850)] border border-[color:var(--ink-700)] border-dashed rounded-xl p-5 mb-8">
 							<h3 class="font-semibold text-[color:var(--paper-dim)]">Segment Revenue &amp; Earnings Audit</h3>
-							<p class="text-sm text-[color:var(--paper-muted)] mt-1">Couldn't load the filing panels — refresh to retry.</p>
+							<p class="text-sm text-[color:var(--paper-muted)] mt-1">
+								Couldn't load the filing panels in time — the data source was slow, not necessarily empty.
+								<a href="javascript:location.reload()" class="text-[color:var(--accent)] underline">Refresh</a> to retry; a partially-completed load is usually cached.
+							</p>
 						</div>`;
 				});
 		}

@@ -32,11 +32,21 @@ let segments: SegmentResult | null = null;
 let audit: AuditResult | null = null;
 
 if (t && isUs) {
-	// Segments and audit in parallel. The audit needs a fresh quote (EPS /
-	// price / market cap feed the adjustment arithmetic); segments don't.
-	const [segRes, quoteRes] = await Promise.allSettled([
+	// Quote first — the audit needs it (EPS / price / market cap) and it's fast
+	// (Yahoo). Then BOTH filing pipelines run concurrently: their LLM calls are
+	// the long pole (free-router models can take tens of seconds), and running
+	// them sequentially doubled the panel's worst-case wait to 2× the timeout —
+	// which pushed the request past what a browser will sit through and made
+	// the panels appear to vanish.
+	const quoteRes = await lookupTicker(t).catch((e) => {
+		console.error("[stocks:panel] quote THREW:", t, e);
+		return null;
+	});
+	const quote = quoteRes?.quote ?? null;
+
+	const [segRes, auditRes] = await Promise.allSettled([
 		getSegments(env, env?.STOCK_CACHE, t),
-		lookupTicker(t),
+		quote && quote.market === "US" ? getEarningsAudit(env, env?.STOCK_CACHE, t, quote) : Promise.resolve(null),
 	]);
 
 	if (segRes.status === "fulfilled") {
@@ -44,16 +54,10 @@ if (t && isUs) {
 	} else {
 		console.error("[stocks:panel] segments THREW:", t, segRes.reason);
 	}
-
-	const quote = quoteRes.status === "fulfilled" ? quoteRes.value.quote : null;
-	if (quoteRes.status === "rejected") {
-		console.error("[stocks:panel] quote THREW:", t, quoteRes.reason);
-	}
-	if (quote && quote.market === "US") {
-		audit = await getEarningsAudit(env, env?.STOCK_CACHE, t, quote).catch((e) => {
-			console.error("[stocks:panel] audit THREW:", t, e);
-			return null;
-		});
+	if (auditRes.status === "fulfilled") {
+		audit = auditRes.value;
+	} else {
+		console.error("[stocks:panel] audit THREW:", t, auditRes.reason);
 	}
 }
 
