@@ -1,0 +1,59 @@
+---
+// Earnings audit panel — one-off items between reported and adjusted EPS.
+// Rendered both by the result page and by the async panel partial.
+import RatioTile from "./RatioTile.astro";
+import type { AuditResult } from "../../lib/stock-research/index.ts";
+import { formatNumber } from "../../lib/stock-research/format.ts";
+
+interface Props {
+	audit: AuditResult;
+}
+const { audit } = Astro.props;
+---
+
+<div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
+	<div class="flex items-center justify-between gap-4 mb-5">
+		<h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2">
+			<iconify-icon icon="mdi:file-document-edit" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
+			Earnings Audit
+		</h2>
+		<span class="text-xs text-[color:var(--paper-dim)]">{audit.period} · {audit.source}</span>
+	</div>
+
+	{audit.items.length > 0 ? (
+		<>
+			<div class="space-y-2 mb-5">
+				{audit.items.map((it) => (
+					<div class="flex items-start justify-between gap-4 text-sm bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg px-3 py-2">
+						<div>
+							<span class="text-[color:var(--paper)] font-medium">{it.label}</span>
+							<span class={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded ${it.impact === "charge" ? "text-red-400 bg-red-400/10" : "text-green-400 bg-green-400/10"}`}>{it.impact === "charge" ? "CHARGE" : "GAIN"}</span>
+						</div>
+						<span class="font-mono text-[color:var(--paper-dim)]">{formatNumber(it.amount)}</span>
+					</div>
+				))}
+			</div>
+
+			<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+				<RatioTile label="Reported EPS" value={formatNumber(audit.reportedEps, 2)} />
+				<RatioTile
+					label="Adjusted EPS"
+					value={formatNumber(audit.adjustedEps, 2)}
+					colorClass={audit.adjustedEps !== null && audit.reportedEps !== null && audit.adjustedEps !== audit.reportedEps ? "text-[color:var(--accent)]" : ""}
+				/>
+				<RatioTile label="Reported P/E" value={audit.reportedPe !== null ? audit.reportedPe.toFixed(2) : "—"} />
+				<RatioTile
+					label="Adjusted P/E"
+					value={audit.adjustedPe !== null ? audit.adjustedPe.toFixed(2) : "—"}
+					colorClass={audit.adjustedPe !== null ? "text-[color:var(--accent)]" : "text-[color:var(--paper-muted)]"}
+				/>
+			</div>
+		</>
+	) : (
+		<p class="text-sm text-[color:var(--paper-dim)]">{audit.summary}</p>
+	)}
+
+	{audit.summary && audit.items.length > 0 && (
+		<p class="mt-4 text-xs text-[color:var(--paper-muted)] italic">{audit.summary}</p>
+	)}
+</div>

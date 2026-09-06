@@ -1,0 +1,65 @@
+---
+// Async panel partial — segment revenue + earnings audit as a bare HTML
+// fragment (`partial = true` = no doctype/html shell).
+//
+// Why this exists: both sections need an EDGAR filing fetch + an LLM call.
+// Running them inside the main SSR request meant the first view of a ticker
+// waited ~10s and often rendered "unavailable" when the LLM timed out, while
+// a refresh hit the KV cache and worked. Now the result page paints instantly
+// with spinner cards and this route is fetched client-side after load; it
+// caches the same way, so repeat views land from KV.
+import { env } from "cloudflare:workers";
+import SegmentPanel from "../../../../components/stocks/SegmentPanel.astro";
+import AuditPanel from "../../../../components/stocks/AuditPanel.astro";
+import PhasePlaceholder from "../../../../components/stocks/PhasePlaceholder.astro";
+import {
+	lookupTicker,
+	getSegments,
+	getEarningsAudit,
+	type SegmentResult,
+	type AuditResult,
+} from "../../../../lib/stock-research/index.ts";
+
+export const prerender = false;
+export const partial = true;
+
+const { ticker } = Astro.params;
+const t = decodeURIComponent(ticker ?? "").trim().toUpperCase();
+// Mirrors detectMarket in yahoo.ts: only `.SI` is non-US today.
+const isUs = !t.endsWith(".SI");
+
+let segments: SegmentResult | null = null;
+let audit: AuditResult | null = null;
+
+if (t && isUs) {
+	// Segments and audit in parallel. The audit needs a fresh quote (EPS /
+	// price / market cap feed the adjustment arithmetic); segments don't.
+	const [segRes, quoteRes] = await Promise.allSettled([
+		getSegments(env, env?.STOCK_CACHE, t),
+		lookupTicker(t),
+	]);
+
+	if (segRes.status === "fulfilled") {
+		segments = segRes.value;
+	} else {
+		console.error("[stocks:panel] segments THREW:", t, segRes.reason);
+	}
+
+	const quote = quoteRes.status === "fulfilled" ? quoteRes.value.quote : null;
+	if (quoteRes.status === "rejected") {
+		console.error("[stocks:panel] quote THREW:", t, quoteRes.reason);
+	}
+	if (quote && quote.market === "US") {
+		audit = await getEarningsAudit(env, env?.STOCK_CACHE, t, quote).catch((e) => {
+			console.error("[stocks:panel] audit THREW:", t, e);
+			return null;
+		});
+	}
+}
+
+// The client swaps this fragment in with innerHTML — never cache it.
+Astro.response.headers.set("Cache-Control", "no-store");
+---
+
+{segments ? <SegmentPanel segments={segments} /> : <PhasePlaceholder title="Segment Revenue Breakdown" icon="mdi:chart-pie" description="No segment revenue available for this company from SEC filings." badge="Phase 2" />}
+{audit ? <AuditPanel audit={audit} /> : <PhasePlaceholder title="Earnings Audit" icon="mdi:file-document-edit" description="One-off item identification unavailable right now (filing fetch or LLM step failed)." badge="Phase 3" />}

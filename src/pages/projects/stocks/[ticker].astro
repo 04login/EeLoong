@@ -1,23 +1,18 @@
 ---
 import "../../../styles/global.css";
-import { env } from "cloudflare:workers";
 import RatioTile from "../../../components/stocks/RatioTile.astro";
 import StatTile from "../../../components/stocks/StatTile.astro";
 import PhasePlaceholder from "../../../components/stocks/PhasePlaceholder.astro";
+import LoadingPanel from "../../../components/stocks/LoadingPanel.astro";
 import {
 	lookupTicker,
-	getSegments,
-	getEarningsAudit,
 	getPeerComparison,
 	computeFairValue,
 	PEER_GROUPS,
-	type Fundamentals,
-	type SegmentResult,
-	type TickerQuote,
-	type AuditResult,
 	type PeerComparison,
 	type FairValue,
 } from "../../../lib/stock-research/index.ts";
+import { formatNumber, formatPercent, ratioClass, cur } from "../../../lib/stock-research/format.ts";
 
 export const prerender = false;
 
@@ -28,32 +23,11 @@ const result = await lookupTicker(ticker);
 const { quote, fundamentals, error } = result;
 console.log("[stocks] lookupTicker:", ticker, JSON.stringify({ market: quote?.market, symbol: quote?.symbol, error }));
 
-// Phase 2 — segment revenue (US only, best-effort). Fails silently to a null
-// so the panel renders "not available" instead of erroring.
-let segments: SegmentResult | null = null;
-if (quote?.market === "US") {
-	try {
-		segments = await getSegments(env, env?.STOCK_CACHE, ticker);
-		console.log("[stocks] getSegments:", ticker, segments ? `ok (${segments.groups.reduce((n, g) => n + g.rows.length, 0)} rows in ${segments.groups.length} groups, source=${segments.source})` : "null");
-	} catch (e) {
-		console.error("[stocks] getSegments THREW:", ticker, e);
-		segments = null;
-	}
-} else {
-	console.log("[stocks] segments skipped (market not US):", quote?.market ?? "no quote");
-}
-
-// Phase 3 — earnings audit (US only, same failure posture).
-let audit: AuditResult | null = null;
-if (quote?.market === "US") {
-	try {
-		audit = await getEarningsAudit(env, env?.STOCK_CACHE, ticker, quote);
-		console.log("[stocks] getEarningsAudit:", ticker, audit ? `ok (${audit.items.length} items)` : "null");
-	} catch (e) {
-		console.error("[stocks] getEarningsAudit THREW:", ticker, e);
-		audit = null;
-	}
-}
+// Phase 2 + 3 (segment revenue, earnings audit) are NOT run here anymore —
+// they need an EDGAR filing fetch + an LLM call, which made the first view of
+// a ticker hang for ~10s and often render "unavailable". The page paints
+// instantly with spinner cards and /panel (a partial route) is fetched
+// client-side; its results cache in KV exactly as before.
 
 // Phase 4 — peers + fair value (live, no cache). Only tickers with a curated
 // peer set in config get these panels.
@@ -77,29 +51,8 @@ if (quote) {
 	}
 }
 
-const formatNumber = (n: number | null, decimals = 2): string => {
-	if (n === null || !isFinite(n)) return "—";
-	if (Math.abs(n) >= 1e12) return `${(n / 1e12).toFixed(decimals)}T`;
-	if (Math.abs(n) >= 1e9) return `${(n / 1e9).toFixed(decimals)}B`;
-	if (Math.abs(n) >= 1e6) return `${(n / 1e6).toFixed(decimals)}M`;
-	if (Math.abs(n) >= 1e3) return `${(n / 1e3).toFixed(decimals)}K`;
-	return n.toFixed(decimals);
-};
-
-const formatPercent = (n: number | null): string => {
-	if (n === null || !isFinite(n)) return "—";
-	const sign = n > 0 ? "+" : "";
-	return `${sign}${(n * 100).toFixed(2)}%`;
-};
-
-const ratioClass = (v: number | null): string => {
-	if (v === null) return "text-[color:var(--paper-muted)]";
-	if (v < 10) return "text-green-400";
-	if (v < 20) return "text-yellow-300";
-	return "text-red-400";
-};
-
-const cur = (c: string | null): string => (c === "USD" ? "$" : c === "SGD" ? "S$" : "");
+// Shared formatting helpers moved to lib/stock-research/format.ts so the async
+// panel partial renders identical numbers.
 ---
 
 <html lang="en">
@@ -111,7 +64,7 @@ const cur = (c: string | null): string => (c === "USD" ? "$" : c === "SGD" ? "S$
 	<script is:inline type="module" src="https://cdn.jsdelivr.net/npm/iconify-icon@1/dist/iconify-icon.min.js"></script>
 </head>
 <body class="min-h-screen bg-[color:var(--ink-900)] text-[color:var(--paper)]">
-	<main class="w-full max-w-[96%] xl:max-w-[900px] mx-auto pb-12 pt-4 md:pt-8 md:px-8">
+	<main class="w-full max-w-[96%] xl:max-w-[90%] mx-auto pb-12 pt-4 md:pt-8 md:px-8">
 		<!-- Header -->
 		<div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
 			<div>
@@ -218,109 +171,35 @@ const cur = (c: string | null): string => (c === "USD" ? "$" : c === "SGD" ? "S$
 					</div>
 				)}
 
-				<!-- Segment Revenue Breakdown (Phase 2) -->
-				{segments && (
-					<div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
-						<div class="flex items-center justify-between gap-4 mb-5">
-							<h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2">
-								<iconify-icon icon="mdi:chart-pie" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
-								Segment Revenue
-							</h2>
-							<span class="text-xs text-[color:var(--paper-dim)]">{segments.period} · {segments.source}</span>
-						</div>
-
-						<div class="space-y-6">
-							{segments.groups.map((group) => (
-								<div>
-									<p class="text-xs font-semibold uppercase tracking-wider text-[color:var(--paper-dim)] mb-2">{group.axisLabel}</p>
-									{group.rows.map((s) => {
-										const max = Math.max(...group.rows.map((x) => x.revenue));
-										const pct = max > 0 ? (s.revenue / max) * 100 : 0;
-										return (
-											<div class="mb-2.5">
-												<div class="flex items-center justify-between text-sm mb-1">
-													<span class="text-[color:var(--paper)] font-medium">{s.label}</span>
-													<span class="text-[color:var(--paper-dim)] font-mono">{formatNumber(s.revenue)}</span>
-												</div>
-												<div class="h-2 rounded bg-[color:var(--ink-700)] overflow-hidden">
-													<div class="h-full rounded bg-gradient-to-r from-[color:var(--accent)] to-[color:var(--accent-light)]" style={`width:${pct}%`}></div>
-												</div>
-											</div>
-										);
-									})}
-								</div>
-							))}</div>
-
-						{segments.sourceSummary && (
-							<p class="mt-4 text-xs text-[color:var(--paper-muted)] italic">Source: {segments.sourceSummary}</p>
-						)}
+				<!-- Segment Revenue + Earnings Audit — loaded async via /panel (US filings only) -->
+				{quote?.market === "US" ? (
+					<div id="stock-panels" class="contents" data-ticker={encodeURIComponent(quote.symbol)}>
+						<LoadingPanel
+							title="Segment Revenue"
+							icon="mdi:chart-pie"
+							description="Extracting segment revenue from the latest 10-K (SEC EDGAR)…"
+						/>
+						<LoadingPanel
+							title="Earnings Audit"
+							icon="mdi:file-document-edit"
+							description="Scanning the filing for one-off items and asking the model to label them…"
+						/>
 					</div>
-				)}
-				{!segments && quote?.market === "US" && (
-					<PhasePlaceholder
-						title="Segment Revenue Breakdown"
-						icon="mdi:chart-pie"
-						description="No segment revenue available for this company from SEC filings."
-						badge="Phase 2"
-					/>
-				)}
-
-				<!-- Earnings Audit (Phase 3) -->
-				{audit && (
-					<div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
-						<div class="flex items-center justify-between gap-4 mb-5">
-							<h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2">
-								<iconify-icon icon="mdi:file-document-edit" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
-								Earnings Audit
-							</h2>
-							<span class="text-xs text-[color:var(--paper-dim)]">{audit.period} · {audit.source}</span>
-						</div>
-
-						{audit.items.length > 0 ? (
-							<>
-								<div class="space-y-2 mb-5">
-									{audit.items.map((it) => (
-										<div class="flex items-start justify-between gap-4 text-sm bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg px-3 py-2">
-											<div>
-												<span class="text-[color:var(--paper)] font-medium">{it.label}</span>
-												<span class={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded ${it.impact === "charge" ? "text-red-400 bg-red-400/10" : "text-green-400 bg-green-400/10"}`}>{it.impact === "charge" ? "CHARGE" : "GAIN"}</span>
-											</div>
-											<span class="font-mono text-[color:var(--paper-dim)]">{formatNumber(it.amount)}</span>
-										</div>
-									))}
-								</div>
-
-								<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-									<RatioTile label="Reported EPS" value={formatNumber(audit.reportedEps, 2)} />
-									<RatioTile
-										label="Adjusted EPS"
-										value={formatNumber(audit.adjustedEps, 2)}
-										colorClass={audit.adjustedEps !== null && audit.reportedEps !== null && audit.adjustedEps !== audit.reportedEps ? "text-[color:var(--accent)]" : ""}
-									/>
-									<RatioTile label="Reported P/E" value={audit.reportedPe !== null ? audit.reportedPe.toFixed(2) : "—"} />
-									<RatioTile
-										label="Adjusted P/E"
-										value={audit.adjustedPe !== null ? audit.adjustedPe.toFixed(2) : "—"}
-										colorClass={audit.adjustedPe !== null ? "text-[color:var(--accent)]" : "text-[color:var(--paper-muted)]"}
-									/>
-								</div>
-							</>
-						) : (
-							<p class="text-sm text-[color:var(--paper-dim)]">{audit.summary}</p>
-						)}
-
-						{audit.summary && audit.items.length > 0 && (
-							<p class="mt-4 text-xs text-[color:var(--paper-muted)] italic">{audit.summary}</p>
-						)}
-					</div>
-				)}
-				{!audit && quote?.market === "US" && (
-					<PhasePlaceholder
-						title="Earnings Audit"
-						icon="mdi:file-document-edit"
-						description="One-off item identification unavailable right now (filing fetch or LLM step failed)."
-						badge="Phase 3"
-					/>
+				) : (
+					<>
+						<PhasePlaceholder
+							title="Segment Revenue Breakdown"
+							icon="mdi:chart-pie"
+							description="Segment data is US-only for now — SEC filings don't cover SGX/HK listings."
+							badge="Phase 2"
+						/>
+						<PhasePlaceholder
+							title="Earnings Audit"
+							icon="mdi:file-document-edit"
+							description="Filing audit is US-only for now — SEC filings don't cover SGX/HK listings."
+							badge="Phase 3"
+						/>
+					</>
 				)}
 
 				<!-- Peer Comparison (Phase 4) -->
@@ -432,5 +311,27 @@ const cur = (c: string | null): string => (c === "USD" ? "$" : c === "SGD" ? "S$
 			</>
 		)}
 	</main>
+
+	<script>
+		// Async panels: replace the two spinner cards with the /panel fragment
+		// (segment revenue + earnings audit, run server-side after first paint).
+		// Fire-and-forget — the page is fully usable without it.
+		const host = document.getElementById("stock-panels");
+		const tickerParam = host?.dataset.ticker;
+		if (host && tickerParam) {
+			fetch(`/projects/stocks/${tickerParam}/panel`, { headers: { Accept: "text/html" } })
+				.then((res) => (res.ok ? res.text() : Promise.reject(new Error(String(res.status)))))
+				.then((html) => {
+					host.innerHTML = html;
+				})
+				.catch(() => {
+					host.innerHTML = `
+						<div class="bg-[color:var(--ink-850)] border border-[color:var(--ink-700)] border-dashed rounded-xl p-5 mb-8">
+							<h3 class="font-semibold text-[color:var(--paper-dim)]">Segment Revenue &amp; Earnings Audit</h3>
+							<p class="text-sm text-[color:var(--paper-muted)] mt-1">Couldn't load the filing panels — refresh to retry.</p>
+						</div>`;
+				});
+		}
+	</script>
 </body>
 </html>

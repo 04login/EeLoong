@@ -7,7 +7,7 @@ Personal portfolio site (Astro + Tailwind CSS 4, deployed to Cloudflare Workers 
 - **Personal portfolio** for Ee Loong Low (graphics/software engineer). Main page: [src/pages/index.astro](src/pages/index.astro), content data in [src/data/profile.ts](src/data/profile.ts).
 - **Three tools**, all under `/projects/*`:
   - **CarousellScraper / Deal Monitor** — `/projects/carousell-bot` (+ `/projects/carousell-bot/searches`). Python scraper outside this repo; this repo hosts the Astro dashboard reading Cloudflare D1. Uses **LiteLLM** (Gemini → Groq → Qwen with fallback) for LLM calls.
-  - **Stock Research** — `/projects/stocks` (`src/pages/projects/stocks/`). On-demand PE/P/S/PEG, segment revenue, earnings audit, peer comparison, fair-value band. **Implemented (all 4 code phases), `npm run build` passes, works in local dev — not yet deployed** (STOCK_CACHE KV IDs are placeholders; see below).
+  - **Stock Research** — `/projects/stocks` (`src/pages/projects/stocks/`). On-demand PE/P/S/PEG, segment revenue, earnings audit, peer comparison, fair-value band. **Deployed and live** (remote KV + `OPENROUTER_API_KEY` secret working — see wrangler.toml state below).
   - **Valuation Desk** — `/projects/valuation` (`src/pages/projects/valuation.astro`). Standalone DCF workbench, vanilla JS + Chart.js + FMP API, with its own hand-rolled CSS. **Slated for deletion** — Stock Research replaces it; the swap (delete page + repoint `profile.ts` entry #6) is the one remaining code step.
 - Remaining pages are static portfolio content.
 
@@ -35,43 +35,51 @@ Personal portfolio site (Astro + Tailwind CSS 4, deployed to Cloudflare Workers 
 
 - Name `eeloong`, `compatibility_date = 2026-04-26`, `nodejs_compat` flag.
 - **D1** `DB` = carousell-bot database (binding `DB`, real database_id present).
-- **KV** `STOCK_CACHE` binding declared but **IDs are placeholders** (`your-kv-namespace-id-here`). **Local dev works** (Miniflare local KV under `.wrangler/`), but **the first remote `wrangler deploy` will fail** until real IDs are created via `npx wrangler kv namespace create STOCK_CACHE` and pasted into `wrangler.toml`. The stocks tool needs it at runtime (CIK map + segments/audit cache) — nothing on that page's remote path works until this is done.
+- **KV** `STOCK_CACHE` **created and live** — real `id` + `preview_id` in `wrangler.toml`; the site **is deployed** to Cloudflare Workers and the remote KV is serving traffic (verified Sep 2026 via `wrangler kv key list --remote`).
 - `.wrangler/state/` is Miniflare local state — commit noise, not real.
 
 ## Stock Research Tool — implemented (Phases 1–4)
 
-Status: **all code phases implemented; `npm run build` passes; works in local dev; not yet deployed.** The plan doc (`stock-research-implementation-plan.md`) is historical — where reality differs, this file wins (most notably: EDGAR `companyfacts` was the wrong source — see below).
+Status: **all code phases implemented; `npm run build` passes; deployed and serving remote traffic.** The plan doc (`stock-research-implementation-plan.md`) is historical — where reality differs, this file wins (most notably: EDGAR `companyfacts` was the wrong source — see below).
 
 ### What it is
-On-demand, any-ticker research tool (built to replace Valuation Desk): PE/P/S/PEG from live Yahoo data, segment revenue breakdown (US only), earnings audit (one-off items via LLM), peer comparison, fair-value band. No accounts, no stored universe. Live data fetched per request; only slow-changing filing-derived data is cached (KV).
+On-demand, any-ticker research tool (built to replace Valuation Desk): PE/P/S/PEG from live Yahoo data, segment revenue breakdown (US only), earnings audit (one-off items via LLM), peer comparison, fair-value band. No accounts, no stored universe. Live data fetched per request; only slow-changing filing-derived data is cached (KV). The page paints instantly (quote + ratios + peers), and the filing-derived panels (segments + audit) load into spinner cards via the async `/panel` partial route.
 
 ### File layout (actual)
 ```
 src/pages/projects/stocks/
   index.astro          # search/landing — export const prerender = false
   [ticker].astro       # result page — export const prerender = false
+  [ticker]/panel.astro # async partial (partial = true): segments + audit fragment,
+                       # fetched client-side after first paint; Cache-Control: no-store
 src/lib/stock-research/
-  types.ts  config.ts  index.ts
+  types.ts  config.ts  index.ts  format.ts   # format.ts = shared UI formatters
   sources/  yahoo.ts  edgar.ts  cik-map.ts
   pipeline/ fundamentals.ts  segments.ts  earnings-audit.ts  peer-comparison.ts  fair-value.ts
   llm/      client.ts   prompts.ts
   cache/    kv.ts
 src/components/stocks/
   RatioTile.astro  StatTile.astro  PhasePlaceholder.astro
+  LoadingPanel.astro   # spinner card shown while /panel is in flight
+  SegmentPanel.astro   # segment revenue panel (shared by page + partial)
+  AuditPanel.astro     # earnings audit panel (shared by page + partial)
   # The plan's five named components (FundamentalsCard, SegmentChart, …) were
-  # consolidated into these three; section panels render inline in [ticker].astro.
+  # consolidated; section panels render via SegmentPanel/AuditPanel (async).
 ```
 Both pages carry `export const prerender = false` — explicit but redundant (`output: "server"` is already on-demand). The lib stays portable: nothing touches `locals.runtime`; `[ticker].astro` passes `env.STOCK_CACHE` (from `cloudflare:workers`) into the pipeline. No `/api/stocks/[ticker].ts` endpoint — the SSR page is the API.
 
 ### Implementation facts (learned in the build — don't re-derive)
 - **EDGAR `companyfacts` / `companyconcept` strip ALL dimensional (segment) data** — zero `segment:` keys even for AAPL/MSFT/KO, so the plan's stated source was wrong. Segment extraction instead works directly off the **raw 10-K XBRL instance XML** (`edgar.ts`: parse `<context>` blocks for segment/product members + numeric revenue facts), with a fallback to the **rendered HTML note** (find the segment/revenue `R*.htm` via `FilingSummary.xml`, extract `<table>`s) for large filers like Apple that only tag the aggregate. The LLM normalizes both paths; it never invents numbers.
 - **XBRL gotchas (each broke the pipeline once — don't regress)**:
+  - Filers tag revenue on **multiple dimension axes at once** (Apple: ProductOrService + BusinessSegments + Geographical). The segment extractor **groups rows by axis** (`xbrlSegmentsToRows` → `{ period, groups }`; `SegmentResult.groups` with `axisLabel` headers like "By product / service"). A flat list double-counts (aggregate `ProductMember` beside components iPhone/Mac/…; same China value under two axes) — don't regress to flat.
+  - `StatementBusinessSegmentsAxis` etc. end in `Axis`, so axis regexes must not anchor `$` on the axis name (`/BusinessSegments/`, not `/BusinessSegments$/`).
+  - `submissions` `filings.recent` is **newest-first** — `latest10K` must scan **forward** for the first `10-K` (the original backwards scan returned the *oldest* 10-K in the 1000-filing window: FY2023 instead of FY2025 for Alphabet — silent, plausible-looking, wrong).
   - Namespace prefixes contain hyphens (`us-gaap`) — the fact regex must use `[\w.-]+` for the prefix, and a closing-tag backreference `\1:\2` (a `[A-Za-z0-9_]+` prefix class matched only 192/1418 facts; the us-gaap facts — all segment revenue and nearly all one-off tags — were silently dropped).
   - `instanceDocName` must exclude `FilingSummary.xml` (it's the first `.xml` in every folder listing, not the instance) and handle the `_htm.xml` inline-XBRL naming (`goog-20231231_htm.xml`).
   - `FilingSummary.xml` reports are `<Report …>` **with attributes** and the category tag is **`<MenuCategory>`** — `<Report>` exact-match and `<category>` both parse zero reports.
 - **Yahoo**: `v8/finance/chart` + `v1/finance/search` are keyless. `v10/finance/quoteSummary` is **crumb-gated**: grab the A3 cookie from `fc.yahoo.com` (404 is expected — the Set-Cookie matters), trade it at `v1/test/getcrumb`, send `&crumb=` on the quoteSummary call, with one 401 retry. `fetchQuote` merges chart meta + quoteSummary. Field gotchas: `bookValue`/`forwardEps` live in **`defaultKeyStatistics`** (`price.bookValue` doesn't exist); **changePercent units differ** — chart meta is in percent (−1.11 = −1.11%), quoteSummary in fraction (−0.0111) — normalize to fraction before formatting. Yahoo search often returns **GOOG before GOOGL** for "Alphabet Inc." — both are in `PEER_GROUPS`.
 - **LLM client** (`llm/client.ts`): plain-fetch rotation **Gemini → Groq → OpenRouter**, hard 10 s timeout, Gemini `responseMimeType: application/json`, temperature 0. Models: `gemini-2.5-flash` (primary), `llama-3.3-70b-versatile` (Groq), `qwen/qwen-2.5-72b-instruct` (OpenRouter). Missing key → provider skipped; all providers fail → throw, callers render "unavailable".
-- **Cache** (`cache/kv.ts`): keys prefixed `stock-research:`. Actual keys: `ticker-cik-map` (2-week TTL), `segments:{ticker}:{fyEnd}` / `audit:{ticker}:{fyEnd}` (90-day TTL) where `fyEnd` is the 10-K `reportDate`. Cached value is the **filtered/normalized** payload, never raw multi-MB filings.
+- **Cache** (`cache/kv.ts`): keys prefixed `stock-research:`. Actual keys: `ticker-cik-map` (2-week TTL), `segments:v2:{ticker}:{fyEnd}` / `audit:v2:{ticker}:{fyEnd}` (90-day TTL) where `fyEnd` is the 10-K `reportDate` (the `v2:` midfix orphans entries cached before the extraction/audit-quality fixes — old keys just expire unused). Cached value is the **filtered/normalized** payload, never raw multi-MB filings. Segments are cached **only when the LLM normalize step succeeded** (a raw-label result isn't pinned for 90 days); the audit's "nothing one-off" verdict IS a valid cacheable outcome.
 - **Market gating**: `quote.market` derives from ticker suffix (`.SI` = SGP, else US). Segments + audit run only for US (needs a CIK); SGX/HK tickers get fundamentals + (if curated) peers. Every section degrades to an explicit "not available for this company" placeholder — no thrown page errors.
 - **Peers / fair value**: hand-curated `PEER_GROUPS` in `config.ts` (incl. SGX banks `D05.SI`/`O39.SI`/`U11.SI`); only tickers in a group get the panels. Fair value = peer-average PE × EPS ± 20% band. Gotcha: SGX tickers as object keys **must be quoted** (`"D05.SI": […]`) — unquoted dots broke the build.
 
@@ -87,17 +95,21 @@ Stock tool UI uses the site Tailwind design system (ink/paper/accent) via `Ratio
 
 ### Remaining work
 1. **Replace Valuation Desk** (plan's step 2, still open): delete `src/pages/projects/valuation.astro`; update `src/data/profile.ts` entry #6 (title/description/technologies/link → `/projects/stocks`).
-2. **Deploy prep**: real KV IDs (`npx wrangler kv namespace create STOCK_CACHE`) → `wrangler.toml`; set Worker secret `OPENROUTER_API_KEY`.
-3. **Phase 5 (future)**: SG (`.SI`) segment support via annual-report PDF extraction — same filter → LLM → cache shape as EDGAR, different source (SGXNet / company PDFs, no public structured API).
+2. **Phase 5 (future)**: SG (`.SI`) segment support via annual-report PDF extraction — same filter → LLM → cache shape as EDGAR, different source (SGXNet / company PDFs, no public structured API).
 
 ### Pipeline order (`[ticker].astro`, per request)
 1. Detect market from ticker suffix (`.SI` = SGX; else US).
 2. `lookupTicker` → Yahoo quote + fundamentals (PE/P/S/PEG, all best-effort).
-3. US only: `getSegments` then `getEarningsAudit` — each: resolve CIK → latest 10-K → KV check → EDGAR extract → LLM normalize → cache.
+3. US only: segments + audit are **NOT run in the page request** — they live behind `/projects/stocks/[ticker]/panel` (`partial = true`), fetched client-side after first paint; spinner cards (`LoadingPanel.astro`) swap to `SegmentPanel`/`AuditPanel` markup via `innerHTML`. Fragment is `Cache-Control: no-store`. Within the partial, `getSegments` and `lookupTicker` (for the audit's quote inputs) run in `Promise.allSettled`, then `getEarningsAudit`. KV-cached as before, so second views are fast.
 4. `getPeerComparison` (live, `Promise.allSettled` per peer) if `PEER_GROUPS[ticker]`.
 5. `computeFairValue` (peer-avg PE × EPS ± 20%) when inputs are positive.
 
 Code-first filter pass on EDGAR facts (segment-axis tags / one-off indicators); LLM only groups/labels/normalizes — never invents or computes numbers. All sections fail soft; nothing hangs the page.
+
+### Audit quality guardrails (added after the FY2025 audit returned garbage)
+- `ONE_OFF_TAG_RE` deliberately **excludes bare `gainloss`/`gain loss` and bare `goodwill`** — those matched every recurring investment-portfolio mark (Alphabet's securities gains/losses recur every period) and routine M&A lines. Disposal/settlement one-offs still match via their other word.
+- **Provenance guard** in `earnings-audit.ts`: every LLM-labeled amount must match a raw XBRL fact by magnitude (either sign — `impact` is the direction authority); invented amounts are dropped. Zero-value facts are skipped at extraction (a $0 "impairment" is not an event).
+- Audit prompt explicitly excludes recurring portfolio marks (FVNI/FVTPL/AFS), FX, hedging, zero values, and duplicate aggregate+component views (keep the largest-magnitude view only).
 
 ## Git / repo logistics
 
@@ -108,4 +120,4 @@ Code-first filter pass on EDGAR facts (segment-axis tags / one-off indicators); 
 ## Secrets (never commit)
 
 - Carousell: `DB` D1 + LiteLLM keys (project side).
-- Stock tool: LLM key `OPENROUTER_API_KEY` (the only LLM secret this tool reads) — present in `.dev.vars` for local dev (currently **empty** — set a real key to enable the audit panel); must be set as a Cloudflare Worker secret before first remote deploy. SEC `User-Agent` lives in `config.ts` (`SEC_USER_AGENT`), not as a secret.
+- Stock tool: LLM key `OPENROUTER_API_KEY` (the only LLM secret this tool reads) — set as a Cloudflare Worker secret (remote LLM calls work). **Local `.dev.vars` currently holds an EMPTY value** (20-byte file, value_len=0, verified Sep 2026): local dev fails soft (raw prettified segment rows, "unavailable" audit) and the LLM path can't be exercised locally until it's refilled. SEC `User-Agent` lives in `config.ts` (`SEC_USER_AGENT`), not as a secret.

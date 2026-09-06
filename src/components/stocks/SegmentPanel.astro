@@ -1,0 +1,48 @@
+---
+// Segment revenue panel — one bar list per disclosure axis. Rendered both by
+// the result page and by the async panel partial (markup must stay identical).
+import type { SegmentResult } from "../../lib/stock-research/index.ts";
+import { formatNumber } from "../../lib/stock-research/format.ts";
+
+interface Props {
+	segments: SegmentResult;
+}
+const { segments } = Astro.props;
+---
+
+<div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
+	<div class="flex items-center justify-between gap-4 mb-5">
+		<h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2">
+			<iconify-icon icon="mdi:chart-pie" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
+			Segment Revenue
+		</h2>
+		<span class="text-xs text-[color:var(--paper-dim)]">{segments.period} · {segments.source}</span>
+	</div>
+
+	<div class="space-y-6">
+		{segments.groups.map((group) => (
+			<div>
+				<p class="text-xs font-semibold uppercase tracking-wider text-[color:var(--paper-dim)] mb-2">{group.axisLabel}</p>
+				{group.rows.map((s) => {
+					const max = Math.max(...group.rows.map((x) => x.revenue));
+					const pct = max > 0 ? (s.revenue / max) * 100 : 0;
+					return (
+						<div class="mb-2.5">
+							<div class="flex items-center justify-between text-sm mb-1">
+								<span class="text-[color:var(--paper)] font-medium">{s.label}</span>
+								<span class="text-[color:var(--paper-dim)] font-mono">{formatNumber(s.revenue)}</span>
+							</div>
+							<div class="h-2 rounded bg-[color:var(--ink-700)] overflow-hidden">
+								<div class="h-full rounded bg-gradient-to-r from-[color:var(--accent)] to-[color:var(--accent-light)]" style={`width:${pct}%`}></div>
+							</div>
+						</div>
+					);
+				})}
+			</div>
+		))}
+	</div>
+
+	{segments.sourceSummary && (
+		<p class="mt-4 text-xs text-[color:var(--paper-muted)] italic">Source: {segments.sourceSummary}</p>
+	)}
+</div>

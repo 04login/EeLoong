@@ -1,0 +1,20 @@
+---
+// Spinner card shown while the async panel partial is being fetched
+// (segments + earnings audit run EDGAR/LLM work after first paint).
+interface Props {
+	title: string;
+	icon: string;
+	description: string;
+}
+const { title, icon, description } = Astro.props;
+---
+
+<div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-700)] border-dashed rounded-xl p-5">
+	<div class="flex items-start gap-3">
+		<iconify-icon icon={icon} class="animate-spin text-2xl text-[color:var(--accent)] flex-shrink-0 mt-0.5"></iconify-icon>
+		<div class="flex-1">
+			<h3 class="font-semibold text-[color:var(--paper-dim)]">{title}</h3>
+			<p class="text-sm text-[color:var(--paper-muted)] mt-1">{description}</p>
+		</div>
+	</div>
+</div>
