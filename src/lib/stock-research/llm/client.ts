@@ -46,10 +46,11 @@ export async function llmStructured(
   _role: LlmRole,
   system: string,
   user: string,
-  // 20s — the LLM runs in the async /panel request (after first paint), so a
-  // longer ceiling costs only the panel's own latency when cold; free-router
-  // models can be slow on first token, and 10s was cutting real responses off.
-  timeoutMs = 20_000,
+  // 60s — the LLM runs in the async /panel request (after first paint), so a
+  // long ceiling costs only the panel's own latency when cold; free-router
+  // models can queue for a while before first token, and 10s was cutting real
+  // responses off.
+  timeoutMs = 60_000,
 ): Promise<Record<string, unknown> | null> {
   const key = env.OPENROUTER_API_KEY;
   if (!key) {
