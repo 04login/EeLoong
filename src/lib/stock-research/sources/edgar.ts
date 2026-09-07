@@ -20,6 +20,7 @@
 // (SEC_USER_AGENT), max 10 req/s, nothing sensitive cached.
 
 import { SEC_USER_AGENT } from "../config.ts";
+import type { Trace } from "../debug.ts";
 
 // ---- small XML/HTML helpers (no DOM in Workers) ----
 
@@ -27,8 +28,8 @@ const SEC_BASE = "https://www.sec.gov/Archives/edgar/data";
 const DATA_BASE = "https://data.sec.gov";
 const SEC_TIMEOUT_MS = 8000;
 
-// Shared fetch with SEC's required descriptive UA + a hard timeout so a slow
-// EDGAR request can't hang an SSR page. The submissions JSON lives on
+// Shared fetch wrapper with SEC's required descriptive UA + a hard timeout so
+// a slow EDGAR request can't hang an SSR page. The submissions JSON lives on
 // data.sec.gov; filing folder listings / XBRL instances / R*.htm live under
 // www.sec.gov/Archives/edgar/data. (Serving submissions from the Archives host
 // 404s/redirects — verified by probing.)
@@ -58,6 +59,7 @@ function fetchSecArchive(path: string): Promise<string> {
 
 export type LatestFiling = {
   cik: string;
+  form: string; // "10-K" or "10-Q" — surfaced in debug traces
   accession: string; // with dashes
   acc: string; // without dashes (for URL building)
   primaryDoc: string;
@@ -70,22 +72,33 @@ export type LatestFiling = {
 // (scanning backwards once returned the *oldest* 10-K in the window — silent,
 // plausible-looking, wrong), but rather than trusting list order outright we
 // scan the whole window and keep the max reportDate: odd fiscal calendars can
-// file a newer-dated 10-Q after an older-period 10-K. Amendments (10-K/A,
+// pass a newer-dated 10-Q after an older-period 10-K. Amendments (10-K/A,
 // 10-Q/A) are ignored — exact form match.
 // `cik` is a 10-digit zero-padded string (or a number-coercible int).
-export async function latestPeriodic(cikValue: string): Promise<LatestFiling | null> {
+export async function latestPeriodic(cikValue: string, trace?: Trace): Promise<LatestFiling | null> {
   const cikInt = Number(cikValue.replace(/\D/g, "")).toString();
-  const body = await fetchSecText(`${DATA_BASE}/submissions/CIK${cikInt.padStart(10, "0")}.json`).catch(() => "");
-  if (!body) return null;
+  const body = await fetchSecText(`${DATA_BASE}/submissions/CIK${cikInt.padStart(10, "0")}.json`).catch((e) => {
+    trace?.log("edgar: submissions JSON fetch failed", { cik: cikInt, error: String(e) });
+    return "";
+  });
+
+  if (!body) {
+    trace?.log("edgar: submissions fetch empty → no filing", { cik: cikInt });
+    return null;
+  }
 
   let json: any;
   try {
     json = JSON.parse(body);
-  } catch {
+  } catch (e) {
+    trace?.log("edgar: submissions JSON parse failed", { cik: cikInt, error: String(e) });
     return null;
   }
   const r = json?.filings?.recent;
-  if (!r) return null;
+  if (!r) {
+    trace?.log("edgar: no filings.recent in submissions JSON", { cik: cikInt });
+    return null;
+  }
 
   let best: LatestFiling | null = null;
   for (let i = 0; i < r.form.length; i++) {
@@ -95,6 +108,7 @@ export async function latestPeriodic(cikValue: string): Promise<LatestFiling | n
     if (best && reportDate <= best.periodEnd) continue;
     best = {
       cik: cikInt,
+      form: r.form[i],
       accession: r.accessionNumber[i] ?? "",
       acc: (r.accessionNumber[i] ?? "").replace(/-/g, ""),
       primaryDoc: r.primaryDocument[i] ?? "",
@@ -102,6 +116,7 @@ export async function latestPeriodic(cikValue: string): Promise<LatestFiling | n
       fy: r.fiscalYearEnd?.[i] ?? 0,
     };
   }
+  if (!best) trace?.log("edgar: no 10-K/10-Q in submissions window", { cik: cikInt });
   return best;
 }
 
@@ -173,7 +188,7 @@ export function parseXbrlNumericFacts(xml: string, tagFilter?: RegExp): XbrlReve
 }
 
 // Turn XBRL into raw segment rows grouped by dimension axis, for the most
-// recent annual period. Returns null if no dimensional revenue facts.
+// recent period. Returns null if no dimensional revenue facts.
 //
 // Why grouped by axis: Apple tags revenue on SEVERAL axes at once —
 // ProductOrServiceAxis (iPhone/Mac/Services…), StatementBusinessSegmentsAxis
@@ -204,8 +219,8 @@ export function xbrlSegmentsToRows(
       if (!m.member) continue;
       const key = `${m.axis}|${m.member}|${ctx.endDate}`;
       const existing = byKey.get(key);
-      // Annual fact (spans a year) beats quarterly; keep the largest |val| for
-      // a given (axis, member, period) — typically the FY value.
+      // Keep the largest |val| for a given (axis, member, period) — for a 10-Q
+      // this keeps the YTD slice over the quarter slice; for a 10-K it's the FY.
       if (!existing || Math.abs(f.value) > Math.abs(existing.value)) {
         byKey.set(key, { value: f.value, period: ctx.endDate });
       }
@@ -240,14 +255,31 @@ export function xbrlSegmentsToRows(
 
 export async function fetchXbrlSegmentRows(
   filing: LatestFiling,
+  trace?: Trace,
 ): Promise<{ period: string; groups: { axis: string; rows: { label: string; value: number }[] }[] } | null> {
   const xmlPath = await instanceDocName(filing.acc, Number(filing.cik), filing.primaryDoc);
-  if (!xmlPath) return null;
-  const xml = await fetchSecArchive(`${filing.cik}/${filing.acc}/${xmlPath}`).catch(() => "");
-  if (!xml || xml.length < 1000) return null;
+  if (!xmlPath) {
+    trace?.log("edgar: segments — no instance doc for filing", { acc: filing.acc });
+    return null;
+  }
+  trace?.log("edgar: segments — fetching XBRL instance", { file: xmlPath });
+  const xml = await fetchSecArchive(`${filing.cik}/${filing.acc}/${xmlPath}`).catch((e) => {
+    trace?.log("edgar: segments — XBRL instance fetch failed", { file: xmlPath, error: String(e) });
+    return "";
+  });
+  if (!xml || xml.length < 1000) {
+    trace?.log("edgar: segments — XBRL instance empty/short", { file: xmlPath, len: xml?.length ?? 0 });
+    return null;
+  }
   const ctxs = parseXbrlContexts(xml);
   const facts = parseXbrlNumericFacts(xml);
-  return xbrlSegmentsToRows(ctxs, facts);
+  trace?.log("edgar: segments — XBRL parsed", { contexts: ctxs.size, revenueFacts: facts.length });
+  const rows = xbrlSegmentsToRows(ctxs, facts);
+  trace?.log("edgar: segments — grouped", {
+    groups: rows?.groups.length ?? 0,
+    period: rows?.period ?? "none",
+  });
+  return rows;
 }
 
 // ---- One-off / unusual items (earnings audit) ----
@@ -263,23 +295,38 @@ export async function fetchXbrlSegmentRows(
 export const ONE_OFF_TAG_RE =
   /restructuring|impair|write.?down|writedown|goodwill.?impair|discontinu|litigation|settlement|severance|exit|disposal|unusual|nonrecurring|non.?recurring|casualty|environmental/i;
 
-// Latest-annual-period consolidated (no dimension) facts matching the filter.
+// Latest-period consolidated (no dimension) facts matching the filter.
 // Returns raw rows for the audit pipeline — nothing computed here.
 export async function fetchXbrlOneOffFacts(
   filing: LatestFiling,
+  trace?: Trace,
 ): Promise<{ period: string; rows: { label: string; value: number }[] } | null> {
   const xmlPath = await instanceDocName(filing.acc, Number(filing.cik), filing.primaryDoc);
-  if (!xmlPath) return null;
-  const xml = await fetchSecArchive(`${filing.cik}/${filing.acc}/${xmlPath}`).catch(() => "");
-  if (!xml || xml.length < 1000) return null;
+  if (!xmlPath) {
+    trace?.log("edgar: audit — no instance doc for filing", { acc: filing.acc });
+    return null;
+  }
+  trace?.log("edgar: audit — fetching XBRL instance", { file: xmlPath });
+  const xml = await fetchSecArchive(`${filing.cik}/${filing.acc}/${xmlPath}`).catch((e) => {
+    trace?.log("edgar: audit — XBRL instance fetch failed", { file: xmlPath, error: String(e) });
+    return "";
+  });
+  if (!xml || xml.length < 1000) {
+    trace?.log("edgar: audit — XBRL instance empty/short", { file: xmlPath, len: xml?.length ?? 0 });
+    return null;
+  }
 
   const ctxs = parseXbrlContexts(xml);
   const facts = parseXbrlNumericFacts(xml, ONE_OFF_TAG_RE);
+  trace?.log("edgar: audit — one-off tag matches", { facts: facts.length });
 
-  // Keep only consolidated facts (no segment member) in the latest annual
-  // period. Dimensional contexts here are segment-level restatements of the
+  // Keep only consolidated facts (no segment member) in the latest period.
+  // Dimensional contexts here are segment-level restatements of the
   // same item — the audit cares about the company-wide impact.
-  const fyEnd = filing.fyEnd;
+  // NOTE: must be `periodEnd` (the reportDate of the chosen filing) — the old
+  // `filing.fyEnd` read a field that doesn't exist, so the filter never
+  // fired and prior-year comparative facts leaked into every audit.
+  const fyEnd = filing.periodEnd;
   const byLabel = new Map<string, { value: number; period: string }>();
   for (const f of facts) {
     const ctx = ctxs.get(f.contextRef);
@@ -291,7 +338,10 @@ export async function fetchXbrlOneOffFacts(
       byLabel.set(f.tag, { value: f.value, period: ctx.endDate || fyEnd });
     }
   }
-  if (byLabel.size === 0) return null;
+  if (byLabel.size === 0) {
+    trace?.log("edgar: audit — no consolidated facts in period", { period: fyEnd });
+    return null;
+  }
 
   const rows = [...byLabel.entries()].map(([label, v]) => ({ label, value: v.value }));
   return { period: fyEnd || [...byLabel.values()][0].period, rows };
@@ -359,12 +409,20 @@ function isSegmentTable(rows: string[]): boolean {
   return numbers.length >= 3;
 }
 
-export async function fetchHtmlSegmentTables(filing: LatestFiling): Promise<string[][] | null> {
+export async function fetchHtmlSegmentTables(filing: LatestFiling, trace?: Trace): Promise<string[][] | null> {
   const note = await segmentNoteHref(filing);
-  if (!note) return null;
-  const html = await fetchSecArchive(`${filing.cik}/${filing.acc}/${note}`).catch(() => "");
+  if (!note) {
+    trace?.log("edgar: html fallback — no segment note in FilingSummary", { acc: filing.acc });
+    return null;
+  }
+  trace?.log("edgar: html fallback — fetching note", { file: note });
+  const html = await fetchSecArchive(`${filing.cik}/${filing.acc}/${note}`).catch((e) => {
+    trace?.log("edgar: html fallback — note fetch failed", { file: note, error: String(e) });
+    return "";
+  });
   if (!html) return null;
   const tables = extractHtmlTables(html);
   const good = tables.filter(isSegmentTable);
+  trace?.log("edgar: html fallback — tables extracted", { tables: tables.length, matching: good.length });
   return good.length > 0 ? good.slice(0, 3) : null;
 }

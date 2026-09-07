@@ -3,7 +3,7 @@
 // Flow (mirrors segments.ts):
 //   1. Resolve ticker → CIK (cik-map.ts, KV-cached).
 //   2. Find the latest periodic filing (edgar.ts: 10-Q if newer than the 10-K).
-//   3. KV cache `audit:v3:{ticker}:{periodEnd}` (months TTL).
+//   3. KV cache `audit:v4:{ticker}:{periodEnd}` (months TTL).
 //   4. Extract raw one-off-tagged facts from the XBRL instance.
 //   5. LLM decides which are genuinely one-off and labels them (charge/gain).
 //   6. If usable: recompute adjusted EPS/PE — the arithmetic is done in code
@@ -27,6 +27,7 @@ import { tickerToCik } from "../sources/cik-map.ts";
 import { latestPeriodic, fetchXbrlOneOffFacts } from "../sources/edgar.ts";
 import { llmStructured, type LlmEnv } from "../llm/client.ts";
 import { AUDIT_SYSTEM_PROMPT, AUDIT_USER_PROMPT } from "../llm/prompts.ts";
+import type { Trace } from "../debug.ts";
 import type { TickerQuote } from "../types.ts";
 
 export type AuditItem = {
@@ -132,52 +133,66 @@ export async function getEarningsAudit(
   kv: KVNamespace | undefined,
   ticker: string,
   quote: TickerQuote,
+  trace?: Trace,
 ): Promise<AuditResult | null> {
   const t = ticker.trim().toUpperCase();
+  trace?.log("audit: start", { ticker: t });
 
   // 1. CIK (US only for now).
   const cikInfo = await tickerToCik(t, kv);
   if (!cikInfo) {
+    trace?.log("audit: no CIK for ticker → null", { ticker: t });
     console.log("[stocks:audit] no CIK for", t);
     return null;
   }
+  trace?.log("audit: CIK resolved", { cik: cikInfo.cik });
 
   // 2. Latest periodic filing — 10-Q if newer, else 10-K (mirrors segments).
-  const filing = await latestPeriodic(cikInfo.cik);
+  const filing = await latestPeriodic(cikInfo.cik, trace);
   if (!filing) {
+    trace?.log("audit: no periodic filing found → null", { cik: cikInfo.cik });
     console.log("[stocks:audit] no periodic filing for CIK", cikInfo.cik);
     return null;
   }
+  trace?.log("audit: latest periodic filing", {
+    form: filing.form,
+    accession: filing.accession,
+    periodEnd: filing.periodEnd,
+  });
 
   const fyEnd = filing.periodEnd;
-  // v3: bumps past results cached when the source was 10-K-only — a 10-Q's
-  // YTD one-off window must not collide with the 10-K's full-year key for the
-  // same ticker (also orphans everything cached before the audit-quality
-  // guardrails and the newest-first filing fix).
-  const cacheKey = `audit:v3:${t}:${fyEnd}`;
+  // v4: bumps past results cached before the `fyEnd` period-filter fix (below)
+  // and the debug-instrumentation pass — old v3 entries were computed with the
+  // period filter silently inert, so their labeled items may include facts from
+  // prior-year comparative periods. Fresh key = fresh audit.
+  const cacheKey = `audit:v4:${t}:${fyEnd}`;
 
   // 3. Cache hit?
   const cached = await kvGet<AuditResult>(kv, cacheKey);
   if (cached) {
+    trace?.log("audit: CACHE HIT", { cacheKey });
     console.log("[stocks:audit] cache hit:", cacheKey);
     return cached;
   }
+  trace?.log("audit: cache miss", { cacheKey });
 
   // 4. Raw one-off facts from XBRL.
   let rawRows: { label: string; value: number }[] = [];
   let period = fyEnd;
   try {
-    const raw = await fetchXbrlOneOffFacts(filing);
+    const raw = await fetchXbrlOneOffFacts(filing, trace);
     console.log("[stocks:audit] raw XBRL one-off facts:", raw?.rows.length ?? "null");
     if (raw && raw.rows.length > 0) {
       rawRows = raw.rows;
       period = raw.period || fyEnd;
     }
   } catch (e) {
+    trace?.log("audit: XBRL fetch threw → null", { error: String(e) });
     console.error("[stocks:audit] XBRL fetch threw:", e);
     return null; // no raw facts → no audit
   }
   if (rawRows.length === 0) {
+    trace?.log("audit: no raw one-off facts in filing → null");
     console.log("[stocks:audit] no raw facts → null");
     return null;
   }
@@ -186,12 +201,16 @@ export async function getEarningsAudit(
   let labeled: LabeledFact[] = [];
   let llmSummary: string | null = null;
   try {
+    trace?.log("audit: calling LLM labeler", { rowsIn: rawRows.length });
     const normalized = await llmStructured(
       env,
       "audit",
       AUDIT_SYSTEM_PROMPT,
       AUDIT_USER_PROMPT({ period, rows: rawRows }),
+      60_000,
+      trace,
     );
+    trace?.log("audit: LLM labeler returned", { preview: JSON.stringify(normalized).slice(0, 300) });
     console.log("[stocks:audit] LLM returned:", JSON.stringify(normalized).slice(0, 500));
     // Provenance guard: the LLM may only RELABEL input facts, never produce
     // amounts that weren't in the raw rows. Magnitude must match a raw fact
@@ -210,7 +229,9 @@ export async function getEarningsAudit(
       labeled = items;
       llmSummary = typeof normalized?.summary === "string" ? normalized.summary : null;
     }
+    trace?.log("audit: provenance filter kept items", { in: (normalized?.items as unknown[] | undefined)?.length ?? 0, kept: labeled.length });
   } catch (e) {
+    trace?.log("audit: LLM threw → null (no fake adjustments)", { error: String(e) });
     console.error("[stocks:audit] LLM threw:", e);
     return null; // LLM unavailable → no audit (no fake adjustments)
   }
@@ -241,6 +262,8 @@ export async function getEarningsAudit(
     adjustedEps: foundItems ? adj.adjustedEps : adj.reportedEps,
     reportedPe: adj.reportedPe,
     adjustedPe: foundItems ? adj.adjustedPe : null,
+    reportedPeg: adj.reportedPeg,
+    adjustedPeg: foundItems ? adj.adjustedPeg : null,
     summary: foundItems
       ? llmSummary
       : "No material one-off items identified in the latest annual filing.",
@@ -249,5 +272,6 @@ export async function getEarningsAudit(
 
   // 7. Cache (months TTL).
   await kvPut(kv, cacheKey, result, CACHE_TTL.audit);
+  trace?.log("audit: done", { items: labeled.length, period });
   return result;
 }

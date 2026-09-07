@@ -10,6 +10,8 @@
 
 // The slice of the worker env this client needs — typed locally so we don't
 // depend on src/env.d.ts' ambient Env (which isn't importable).
+import type { Trace } from "../debug.ts";
+
 export type LlmEnv = {
   OPENROUTER_API_KEY?: string;
   [key: string]: unknown;
@@ -51,13 +53,16 @@ export async function llmStructured(
   // models can queue for a while before first token, and 10s was cutting real
   // responses off.
   timeoutMs = 60_000,
+  trace?: Trace,
 ): Promise<Record<string, unknown> | null> {
   const key = env.OPENROUTER_API_KEY;
   if (!key) {
+    trace?.log("llm: NO API KEY", { role: _role });
     console.error("[stocks:llm] no OPENROUTER_API_KEY");
     throw new Error("LLM unavailable (no OPENROUTER_API_KEY)");
   }
   console.log("[stocks:llm] calling openrouter/free, role:", _role, "prompt chars:", system.length + user.length);
+  trace?.log("llm: calling openrouter/free", { role: _role, promptChars: system.length + user.length });
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -87,6 +92,7 @@ export async function llmStructured(
     });
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
+      trace?.log("llm: HTTP error from OpenRouter", { status: res.status, body: errBody.slice(0, 200) });
       console.error("[stocks LLM HTTP error:", res.status, errBody.slice(0, 300));
       throw new Error(`LLM unavailable (openrouter/free HTTP ${res.status})`);
     }
@@ -95,11 +101,14 @@ export async function llmStructured(
     const text: string | undefined = data?.choices?.[0]?.message?.content;
     const parsed = extractJson(text ?? "");
     if (!parsed) {
+      trace?.log("llm: unparseable/empty model output", { model: data?.model ?? "?", preview: (text ?? "").slice(0, 200) });
       console.error("[stocks:llm] unparseable model output:", (text ?? "").slice(0, 300));
       throw new Error("LLM unavailable (openrouter/free: empty/invalid JSON)");
     }
+    trace?.log("llm: parsed JSON OK", { model: data?.model ?? "?" });
     return parsed;
   } catch (e) {
+    trace?.log("llm: call failed", { error: String(e) });
     if (e instanceof Error && e.message.startsWith("LLM unavailable")) throw e;
     throw new Error(`LLM unavailable (openrouter/free: ${String(e)})`);
   } finally {

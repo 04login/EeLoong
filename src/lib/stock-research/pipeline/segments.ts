@@ -30,6 +30,7 @@ import {
 } from "../sources/edgar.ts";
 import { llmStructured, type LlmEnv } from "../llm/client.ts";
 import { SEGMENT_SYSTEM_PROMPT, SEGMENT_USER_PROMPT } from "../llm/prompts.ts";
+import type { Trace } from "../debug.ts";
 
 export type SegmentRow = {
   label: string;
@@ -83,23 +84,32 @@ export async function getSegments(
   env: LlmEnv,
   kv: KVNamespace | undefined,
   ticker: string,
+  trace?: Trace,
 ): Promise<SegmentResult | null> {
   const t = ticker.trim().toUpperCase();
 
   // 1. CIK (US only for now).
   const cikInfo = await tickerToCik(t, kv);
   if (!cikInfo) {
+    trace?.log("segments: no CIK for ticker", { ticker: t });
     console.log("[stocks:segments] no CIK for", t);
     return null;
   }
+  trace?.log("segments: CIK resolved", { ticker: t, cik: cikInfo.cik });
 
   // 2. Latest periodic filing — 10-Q if it's newer than the 10-K (user
   // decision), so a freshly-filed quarter supersedes last year's annual data.
-  const filing = await latestPeriodic(cikInfo.cik);
+  const filing = await latestPeriodic(cikInfo.cik, trace);
   if (!filing) {
+    trace?.log("segments: no periodic filing found → null", { cik: cikInfo.cik });
     console.log("[stocks:segments] no periodic filing found for CIK", cikInfo.cik);
     return null;
   }
+  trace?.log("segments: latest periodic filing", {
+    form: filing.form,
+    accession: filing.accession,
+    periodEnd: filing.periodEnd,
+  });
 
   const fyEnd = filing.periodEnd;
   // v3: bumps past entries cached when the source was 10-K-only — a 10-Q's
@@ -110,9 +120,11 @@ export async function getSegments(
   // 3. Cache hit?
   const cached = await kvGet<SegmentResult>(kv, cacheKey);
   if (cached) {
+    trace?.log("segments: CACHE HIT", { cacheKey });
     console.log("[stocks:segments] cache hit:", cacheKey);
     return cached;
   }
+  trace?.log("segments: cache miss", { cacheKey });
 
   // 4. Extract raw rows (XBRL first, HTML fallback).
   let groups: SegmentGroup[] = [];
@@ -121,7 +133,11 @@ export async function getSegments(
   let sourceSummary: string | null = null;
 
   try {
-    const xbrl = await fetchXbrlSegmentRows(filing);
+    const xbrl = await fetchXbrlSegmentRows(filing, trace);
+    trace?.log("segments: XBRL extraction returned", {
+      groups: xbrl?.groups.length ?? "null",
+      period: xbrl?.period ?? "n/a",
+    });
     console.log("[stocks:segments] XBRL groups:", xbrl?.groups.length ?? "null");
     if (xbrl && xbrl.groups.length > 0) {
       groups = xbrl.groups.map((g) => ({
@@ -133,13 +149,15 @@ export async function getSegments(
       sourceSummary = "Periodic filing XBRL instance — revenue facts grouped by disclosure axis";
     }
   } catch (e) {
+    trace?.log("segments: XBRL fetch threw — falling back to HTML", { error: String(e) });
     console.error("[stocks:segments] XBRL fetch threw:", e);
     // fall through to HTML
   }
 
   if (groups.length === 0) {
     try {
-      const htmlTables = await fetchHtmlSegmentTables(filing);
+      const htmlTables = await fetchHtmlSegmentTables(filing, trace);
+      trace?.log("segments: HTML fallback returned", { tables: htmlTables?.length ?? "null" });
       console.log("[stocks:segments] HTML tables:", htmlTables?.length ?? "null");
       if (htmlTables && htmlTables.length > 0) {
         // The LLM is far better at turning these ragged rows into good JSON,
@@ -157,7 +175,9 @@ export async function getSegments(
         source = "html";
         sourceSummary = "Periodic filing financial-statement HTML — segment note";
       }
-    } catch {
+    } catch (e) {
+      trace?.log("segments: HTML fallback threw", { error: String(e) });
+      console.error("[stocks:segments] HTML fallback threw:", e);
       // no segment data
     }
   }
@@ -168,12 +188,16 @@ export async function getSegments(
   // drops totals/duplicates but must not merge or invent groups.
   let llmOk = false;
   try {
+    trace?.log("segments: calling LLM normalize", { rowsIn: groups.reduce((n, g) => n + g.rows.length, 0) });
     const normalized = await llmStructured(
       env,
       "segment-normalize",
       SEGMENT_SYSTEM_PROMPT,
       SEGMENT_USER_PROMPT({ period, groups: groups.map((g) => ({ axis: g.axisLabel, rows: g.rows })) }),
+      60_000,
+      trace,
     );
+    trace?.log("segments: LLM normalize returned", { preview: JSON.stringify(normalized).slice(0, 300) });
     console.log("[stocks:segments] LLM returned:", JSON.stringify(normalized).slice(0, 500));
     const rawGroups = normalized?.groups as
       | { axis: string; rows: { label: string; revenue: number }[] }[]

@@ -19,6 +19,7 @@ import {
 	type SegmentResult,
 	type AuditResult,
 } from "../../../../lib/stock-research/index.ts";
+import { createTrace } from "../../../../lib/stock-research/debug.ts";
 
 export const prerender = false;
 export const partial = true;
@@ -27,6 +28,14 @@ const { ticker } = Astro.params;
 const t = decodeURIComponent(ticker ?? "").trim().toUpperCase();
 // Mirrors detectMarket in yahoo.ts: only `.SI` is non-US today.
 const isUs = !t.endsWith(".SI");
+
+// Debug trace: the whole pipeline appends to it; it's serialized into an
+// X-Stocks-Debug response header that the client script prints to the
+// browser console. Active only when STOCK_DEBUG is set (env / .dev.vars).
+const trace = createTrace(env as unknown as { STOCK_DEBUG?: string | boolean });
+
+console.log("[stocks:panel] START:", t, "isUs:", isUs);
+trace.log("panel START", { ticker: t, isUs });
 
 let segments: SegmentResult | null = null;
 let audit: AuditResult | null = null;
@@ -40,29 +49,47 @@ if (t && isUs) {
 	// the panels appear to vanish.
 	const quoteRes = await lookupTicker(t).catch((e) => {
 		console.error("[stocks:panel] quote THREW:", t, e);
+		trace.log("panel: quote THREW", { error: String(e) });
 		return null;
 	});
 	const quote = quoteRes?.quote ?? null;
 
+	console.log("[stocks:panel] quote:", t, quote ? { symbol: quote.symbol, market: quote.market, price: quote.price } : "null");
+	trace.log("panel: quote resolved", quote ? { symbol: quote.symbol, market: quote.market, price: quote.price } : null);
+
 	const [segRes, auditRes] = await Promise.allSettled([
-		getSegments(env, env?.STOCK_CACHE, t),
-		quote && quote.market === "US" ? getEarningsAudit(env, env?.STOCK_CACHE, t, quote) : Promise.resolve(null),
+		getSegments(env, env?.STOCK_CACHE, t, trace),
+		quote && quote.market === "US" ? getEarningsAudit(env, env?.STOCK_CACHE, t, quote, trace) : Promise.resolve(null),
 	]);
 
 	if (segRes.status === "fulfilled") {
 		segments = segRes.value;
+		console.log("[stocks:panel] segments OK:", t, segments ? { groups: segments.groups.length, source: segments.source, period: segments.period } : "null");
+		trace.log("panel: segments resolved", segments ? { groups: segments.groups.length, source: segments.source, period: segments.period } : null);
 	} else {
 		console.error("[stocks:panel] segments THREW:", t, segRes.reason);
+		trace.log("panel: segments THREW", { error: String(segRes.reason) });
 	}
 	if (auditRes.status === "fulfilled") {
 		audit = auditRes.value;
+		console.log("[stocks:panel] audit OK:", t, audit ? { items: audit.items.length, period: audit.period } : "null");
+		trace.log("panel: audit resolved", audit ? { items: audit.items.length, period: audit.period } : null);
 	} else {
 		console.error("[stocks:panel] audit THREW:", t, auditRes.reason);
+		trace.log("panel: audit THREW", { error: String(auditRes.reason) });
 	}
 }
 
+console.log("[stocks:panel] RESULT:", t, { hasSegments: !!segments, hasAudit: !!audit });
+trace.log("panel RESULT", { hasSegments: !!segments, hasAudit: !!audit });
+
 // The client swaps this fragment in with innerHTML — never cache it.
 Astro.response.headers.set("Cache-Control", "no-store");
+
+// Debug trace → response header (client prints it to the browser console).
+// Absent when STOCK_DEBUG is off, so prod headers stay unchanged.
+const debugHeader = trace.dumpHeader();
+if (debugHeader) Astro.response.headers.set("X-Stocks-Debug", debugHeader);
 ---
 
 {segments ? <SegmentPanel segments={segments} /> : <PhasePlaceholder title="Segment Revenue Breakdown" icon="mdi:chart-pie" description="No segment revenue available for this company from SEC filings." badge="Phase 2" />}
