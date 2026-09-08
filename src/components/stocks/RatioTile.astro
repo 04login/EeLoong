@@ -24,14 +24,12 @@ function getSignal(label: string, valueStr: string): RatioSignal {
 
 const signal = getSignal(label, value);
 
-// Gradient bar color stops (vertical: bottom to top)
-const gradientStops = {
-	green: "from-green-500 via-green-400 to-yellow-400",
-	yellow: "from-yellow-400 via-yellow-300 to-red-400",
-	red: "from-red-400 via-red-500 to-red-600",
-	gray: "from-[color:var(--ink-600)] via-[color:var(--ink-500)] to-[color:var(--ink-400)]",
-};
-const barGradient = gradientStops[signal.barColor];
+const isNA = signal.barColor === "gray";
+// Consistent full-spectrum gradient from High (top: --accent) to Low (bottom: --success)
+// with mid-range fair value (--warning). Gray fallback for N/A.
+const barStyle = isNA
+	? "background: linear-gradient(to top, var(--ink-700), var(--ink-500));"
+	: "background: linear-gradient(to top, var(--success), var(--warning), var(--accent));";
 
 // Zone label for the pointer tag (left of bar)
 const zoneLabels: Record<string, string> = {
@@ -42,10 +40,10 @@ const zoneLabels: Record<string, string> = {
 };
 const pointerLabel = zoneLabels[signal.barColor] || signal.label.toUpperCase();
 const pointerColors: Record<string, string> = {
-	green: "bg-green-500 text-white",
-	yellow: "bg-yellow-400 text-[color:var(--ink-900)]",
-	red: "bg-red-500 text-white",
-	gray: "bg-[color:var(--ink-600)] text-[color:var(--paper-dim)]",
+	green: "bg-[color:var(--success)] text-white",
+	yellow: "bg-[color:var(--warning)] text-[color:var(--ink-900)]",
+	red: "bg-[color:var(--accent)] text-white",
+	gray: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]",
 };
 const pointerBg = pointerColors[signal.barColor] || "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]";
 ---
@@ -68,7 +66,7 @@ const pointerBg = pointerColors[signal.barColor] || "bg-[color:var(--ink-700)] t
 				</div>
 
 				<!-- Vertical gradient bar -->
-				<div class={`w-2.5 h-32 rounded-full bg-gradient-to-t ${barGradient} relative flex-shrink-0`}>
+				<div class="w-2.5 h-32 rounded-full overflow-hidden relative flex-shrink-0" style={barStyle}>
 					<!-- White marker line on the bar -->
 					<div class="absolute left-0 right-0 h-0.5 bg-white/90 shadow-[0_0_4px_rgba(0,0,0,0.6)]" style={`bottom: ${signal.barPosition}%;`}></div>
 				</div>
