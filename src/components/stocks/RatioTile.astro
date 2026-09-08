@@ -19,17 +19,38 @@ function getSignal(label: string, valueStr: string): RatioSignal {
 	if (l.includes("p/b") || l.includes("pb")) return pbSignal(num);
 	if (l.includes("peg")) return pegSignal(num);
 	// fallback to generic
-	return { textClass: colorClass || "text-[color:var(--paper)]", badgeClass: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]", label: "—" };
+	return { textClass: colorClass || "text-[color:var(--paper)]", badgeClass: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]", label: "—", barPosition: 50, barColor: "gray" };
 }
 
 const signal = getSignal(label, value);
+
+// Gradient bar color stops based on signal
+const gradientStops = {
+	green: "from-green-500 via-green-400 to-yellow-400",
+	yellow: "from-yellow-400 via-yellow-300 to-red-400",
+	red: "from-red-400 via-red-500 to-red-600",
+	gray: "from-[color:var(--ink-600)] via-[color:var(--ink-500)] to-[color:var(--ink-400)]",
+};
+const barGradient = gradientStops[signal.barColor];
 ---
 
 <div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-4">
-	<p class="text-xs text-[color:var(--paper-dim)] uppercase tracking-wider mb-1 flex items-center gap-1.5">
-		{label}
-		<span class={signal.badgeClass + " px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider"}>{signal.label}</span>
-	</p>
-	<p class="text-2xl font-bold {signal.textClass}">{value}</p>
+	<div class="flex items-center justify-between gap-2 mb-1.5">
+		<p class="text-xs text-[color:var(--paper-dim)] uppercase tracking-wider">{label}</p>
+		<span class={signal.badgeClass + " px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap"}>{signal.label}</span>
+	</div>
+	<div class="relative mb-2">
+		<p class="text-2xl font-bold {signal.textClass}">{value}</p>
+		<!-- Gradient bar with position indicator -->
+		<div class="mt-2 h-2 rounded-full bg-gradient-to-r {barGradient} relative overflow-hidden">
+			<div class="absolute top-0 bottom-0 w-1 bg-white/80 shadow-[0_0_4px_rgba(0,0,0,0.5)] transition-all duration-300" style="left: {signal.barPosition}%; transform: translateX(-50%);"></div>
+		</div>
+		<!-- Range labels -->
+		<div class="flex justify-between text-[10px] text-[color:var(--paper-muted)] mt-1 font-mono">
+			<span>Low</span>
+			<span>Fair</span>
+			<span>High</span>
+		</div>
+	</div>
 	{source && <p class="text-[10px] text-[color:var(--paper-muted)] mt-1 font-mono">{source}</p>}
 </div>

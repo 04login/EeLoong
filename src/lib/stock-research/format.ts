@@ -19,39 +19,43 @@ export const formatPercent = (n: number | null): string => {
 };
 
 // Ratio-specific color coding — thresholds based on common valuation rules of thumb.
-// Returns an object with text color, background badge color, and a human label.
+// Returns an object with text color, background badge color, a human label,
+// and a 0–100 position for a gradient bar indicator.
 export type RatioSignal = {
   textClass: string;
   badgeClass: string;
-  label: string; // "Low" | "Reasonable" | "High"
+  label: string; // "Low" | "Reasonable" | "High" | "Attractive" | "Fair" | "Expensive" | "N/A"
+  barPosition: number; // 0–100, where on the gradient bar the value sits
+  barColor: "green" | "yellow" | "red" | "gray"; // which color segment of the gradient
 };
 
 export const peSignal = (v: number | null): RatioSignal => {
-  if (v === null) return { textClass: "text-[color:var(--paper-muted)]", badgeClass: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]", label: "N/A" };
-  if (v < 12) return { textClass: "text-green-400", badgeClass: "bg-green-400/20 text-green-400", label: "Low" };
-  if (v < 25) return { textClass: "text-yellow-300", badgeClass: "bg-yellow-300/20 text-yellow-300", label: "Reasonable" };
-  return { textClass: "text-red-400", badgeClass: "bg-red-400/20 text-red-400", label: "High" };
+  if (v === null) return { textClass: "text-[color:var(--paper-muted)]", badgeClass: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]", label: "N/A", barPosition: 50, barColor: "gray" };
+  if (v < 12) return { textClass: "text-green-400", badgeClass: "bg-green-400/20 text-green-400", label: "Low", barPosition: Math.min(100, Math.max(0, (v / 12) * 33)), barColor: "green" };
+  if (v < 25) return { textClass: "text-yellow-300", badgeClass: "bg-yellow-300/20 text-yellow-300", label: "Reasonable", barPosition: 33 + Math.min(67, ((v - 12) / 13) * 34), barColor: "yellow" };
+  // cap at ~60 for visual purposes
+  return { textClass: "text-red-400", badgeClass: "bg-red-400/20 text-red-400", label: "High", barPosition: Math.min(100, 67 + Math.min(33, ((v - 25) / 35) * 33)), barColor: "red" };
 };
 
 export const psSignal = (v: number | null): RatioSignal => {
-  if (v === null) return { textClass: "text-[color:var(--paper-muted)]", badgeClass: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]", label: "N/A" };
-  if (v < 2) return { textClass: "text-green-400", badgeClass: "bg-green-400/20 text-green-400", label: "Low" };
-  if (v < 5) return { textClass: "text-yellow-300", badgeClass: "bg-yellow-300/20 text-yellow-300", label: "Reasonable" };
-  return { textClass: "text-red-400", badgeClass: "bg-red-400/20 text-red-400", label: "High" };
+  if (v === null) return { textClass: "text-[color:var(--paper-muted)]", badgeClass: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]", label: "N/A", barPosition: 50, barColor: "gray" };
+  if (v < 2) return { textClass: "text-green-400", badgeClass: "bg-green-400/20 text-green-400", label: "Low", barPosition: Math.min(100, Math.max(0, (v / 2) * 33)), barColor: "green" };
+  if (v < 5) return { textClass: "text-yellow-300", badgeClass: "bg-yellow-300/20 text-yellow-300", label: "Reasonable", barPosition: 33 + Math.min(67, ((v - 2) / 3) * 34), barColor: "yellow" };
+  return { textClass: "text-red-400", badgeClass: "bg-red-400/20 text-red-400", label: "High", barPosition: Math.min(100, 67 + Math.min(33, ((v - 5) / 15) * 33)), barColor: "red" };
 };
 
 export const pbSignal = (v: number | null): RatioSignal => {
-  if (v === null) return { textClass: "text-[color:var(--paper-muted)]", badgeClass: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]", label: "N/A" };
-  if (v < 1) return { textClass: "text-green-400", badgeClass: "bg-green-400/20 text-green-400", label: "Low (<1)" };
-  if (v < 3) return { textClass: "text-yellow-300", badgeClass: "bg-yellow-300/20 text-yellow-300", label: "Reasonable" };
-  return { textClass: "text-red-400", badgeClass: "bg-red-400/20 text-red-400", label: "High" };
+  if (v === null) return { textClass: "text-[color:var(--paper-muted)]", badgeClass: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]", label: "N/A", barPosition: 50, barColor: "gray" };
+  if (v < 1) return { textClass: "text-green-400", badgeClass: "bg-green-400/20 text-green-400", label: "Low (<1)", barPosition: Math.min(100, Math.max(0, v * 33)), barColor: "green" };
+  if (v < 3) return { textClass: "text-yellow-300", badgeClass: "bg-yellow-300/20 text-yellow-300", label: "Reasonable", barPosition: 33 + Math.min(67, ((v - 1) / 2) * 34), barColor: "yellow" };
+  return { textClass: "text-red-400", badgeClass: "bg-red-400/20 text-red-400", label: "High", barPosition: Math.min(100, 67 + Math.min(33, ((v - 3) / 10) * 33)), barColor: "red" };
 };
 
 export const pegSignal = (v: number | null): RatioSignal => {
-  if (v === null) return { textClass: "text-[color:var(--paper-muted)]", badgeClass: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]", label: "N/A" };
-  if (v < 1) return { textClass: "text-green-400", badgeClass: "bg-green-400/20 text-green-400", label: "Attractive (<1)" };
-  if (v < 1.5) return { textClass: "text-yellow-300", badgeClass: "bg-yellow-300/20 text-yellow-300", label: "Fair" };
-  return { textClass: "text-red-400", badgeClass: "bg-red-400/20 text-red-400", label: "Expensive" };
+  if (v === null) return { textClass: "text-[color:var(--paper-muted)]", badgeClass: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]", label: "N/A", barPosition: 50, barColor: "gray" };
+  if (v < 1) return { textClass: "text-green-400", badgeClass: "bg-green-400/20 text-green-400", label: "Attractive (<1)", barPosition: Math.min(100, Math.max(0, v * 50)), barColor: "green" };
+  if (v < 1.5) return { textClass: "text-yellow-300", badgeClass: "bg-yellow-300/20 text-yellow-300", label: "Fair", barPosition: 50 + Math.min(50, ((v - 1) / 0.5) * 50), barColor: "yellow" };
+  return { textClass: "text-red-400", badgeClass: "bg-red-400/20 text-red-400", label: "Expensive", barPosition: Math.min(100, 75 + Math.min(25, ((v - 1.5) / 3.5) * 25)), barColor: "red" };
 };
 
 // Legacy generic function (kept for any existing callers)
