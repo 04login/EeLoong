@@ -55,7 +55,7 @@ const pointerBg = pointerColors[signal.barColor] || "bg-[color:var(--ink-700)] t
 		<!-- Left: Ratio label and value -->
 		<div class="flex-1 min-w-0">
 			<p class="text-xs text-[color:var(--paper-dim)] uppercase tracking-wider mb-1">{label}</p>
-			<p class="text-2xl font-bold {signal.textClass} truncate">{value}</p>
+			<p class={`text-2xl font-bold ${signal.textClass} truncate`}>{value}</p>
 			{source && <p class="text-[10px] text-[color:var(--paper-muted)] mt-1 font-mono">{source}</p>}
 		</div>
 
@@ -63,14 +63,14 @@ const pointerBg = pointerColors[signal.barColor] || "bg-[color:var(--ink-700)] t
 		<div class="flex items-center justify-center flex-shrink-0">
 			<div class="relative flex items-center">
 				<!-- Pointer tag on the LEFT of the bar -->
-				<div class="absolute right-full mr-2 {pointerBg} px-2 py-1 rounded text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap shadow-lg" style="bottom: {signal.barPosition}%; transform: translateY(50%);">
+				<div class={`absolute right-full mr-2 ${pointerBg} px-2 py-1 rounded text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap shadow-lg`} style={`bottom: ${signal.barPosition}%; transform: translateY(50%);`}>
 					{pointerLabel}
 				</div>
 
 				<!-- Vertical gradient bar -->
-				<div class="w-2.5 h-32 rounded-full bg-gradient-to-t {barGradient} relative flex-shrink-0">
+				<div class={`w-2.5 h-32 rounded-full bg-gradient-to-t ${barGradient} relative flex-shrink-0`}>
 					<!-- White marker line on the bar -->
-					<div class="absolute left-0 right-0 h-0.5 bg-white/90 shadow-[0_0_4px_rgba(0,0,0,0.6)]" style="bottom: {signal.barPosition}%;"></div>
+					<div class="absolute left-0 right-0 h-0.5 bg-white/90 shadow-[0_0_4px_rgba(0,0,0,0.6)]" style={`bottom: ${signal.barPosition}%;`}></div>
 				</div>
 			</div>
 		</div>

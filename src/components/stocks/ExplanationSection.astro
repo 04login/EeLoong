@@ -91,7 +91,7 @@ const explanations: Record<string, { title: string; icon: string; bullets: strin
                 {ex.table.rows.map((row, i) => (
                   <tr class={i % 2 === 0 ? "bg-[color:var(--ink-900)]" : "bg-[color:var(--ink-850)]"}>
                     {row.map((cell, ci) => (
-                      <td class="p-3 {ci === 0 ? 'font-mono font-semibold text-[color:var(--paper)]' : ci === 1 ? 'text-green-400' : ci === 2 ? 'text-yellow-300' : ci === 3 ? 'text-red-400' : 'text-[color:var(--paper-muted)]'}">{cell}</td>
+                      <td class={`p-3 ${ci === 0 ? 'font-mono font-semibold text-[color:var(--paper)]' : ci === 1 ? 'text-green-400' : ci === 2 ? 'text-yellow-300' : ci === 3 ? 'text-red-400' : 'text-[color:var(--paper-muted)]'}`}>{cell}</td>
                     ))}
                   </tr>
                 ))}
