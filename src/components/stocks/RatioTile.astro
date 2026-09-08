@@ -24,7 +24,7 @@ function getSignal(label: string, valueStr: string): RatioSignal {
 
 const signal = getSignal(label, value);
 
-// Gradient bar color stops based on signal
+// Gradient bar color stops based on signal (vertical: bottom to top)
 const gradientStops = {
 	green: "from-green-500 via-green-400 to-yellow-400",
 	yellow: "from-yellow-400 via-yellow-300 to-red-400",
@@ -32,25 +32,49 @@ const gradientStops = {
 	gray: "from-[color:var(--ink-600)] via-[color:var(--ink-500)] to-[color:var(--ink-400)]",
 };
 const barGradient = gradientStops[signal.barColor];
+
+// Badge label mapping for the pointer tag
+const zoneLabels: Record<string, string> = {
+	green: "Low",
+	yellow: "Fair",
+	red: "High",
+	gray: "N/A",
+};
+const pointerLabel = zoneLabels[signal.barColor] || signal.label;
+const pointerColors: Record<string, string> = {
+	green: "bg-green-500 text-white",
+	yellow: "bg-yellow-400 text-[color:var(--ink-900)]",
+	red: "bg-red-500 text-white",
+	gray: "bg-[color:var(--ink-600)] text-[color:var(--paper-dim)]",
+};
+const pointerBg = pointerColors[signal.barColor] || "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]";
 ---
 
-<div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-4">
-	<div class="flex items-center justify-between gap-2 mb-1.5">
+<div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-4 relative">
+	<div class="flex items-center justify-between gap-2 mb-2">
 		<p class="text-xs text-[color:var(--paper-dim)] uppercase tracking-wider">{label}</p>
-		<span class={signal.badgeClass + " px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap"}>{signal.label}</span>
-	</div>
-	<div class="relative mb-2">
 		<p class="text-2xl font-bold {signal.textClass}">{value}</p>
-		<!-- Gradient bar with position indicator -->
-		<div class="mt-2 h-2 rounded-full bg-gradient-to-r {barGradient} relative overflow-hidden">
-			<div class="absolute top-0 bottom-0 w-1 bg-white/80 shadow-[0_0_4px_rgba(0,0,0,0.5)] transition-all duration-300" style="left: {signal.barPosition}%; transform: translateX(-50%);"></div>
+	</div>
+
+	<!-- Vertical gradient bar with pointer tag -->
+	<div class="flex items-end justify-center gap-4 h-32 relative">
+		<!-- Range labels on the left -->
+		<div class="flex flex-col justify-between h-full w-10 text-right pr-2">
+			<span class="text-[10px] text-[color:var(--paper-muted)] font-mono">High</span>
+			<span class="text-[10px] text-[color:var(--paper-muted)] font-mono">Fair</span>
+			<span class="text-[10px] text-[color:var(--paper-muted)] font-mono">Low</span>
 		</div>
-		<!-- Range labels -->
-		<div class="flex justify-between text-[10px] text-[color:var(--paper-muted)] mt-1 font-mono">
-			<span>Low</span>
-			<span>Fair</span>
-			<span>High</span>
+
+		<!-- Gradient bar -->
+		<div class="relative w-3 h-full rounded-full bg-gradient-to-t {barGradient} flex-shrink-0">
+			<!-- Pointer tag on the right side of bar -->
+			<div class="absolute right-full mr-2 {pointerBg} px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap shadow-lg" style="bottom: {signal.barPosition}%; transform: translateY(50%);">
+				{pointerLabel}
+			</div>
+			<!-- White marker line on the bar -->
+			<div class="absolute left-0 right-0 h-0.5 bg-white/80 shadow-[0_0_4px_rgba(0,0,0,0.5)]" style="bottom: {signal.barPosition}%;"></div>
 		</div>
 	</div>
-	{source && <p class="text-[10px] text-[color:var(--paper-muted)] mt-1 font-mono">{source}</p>}
+
+	{source && <p class="text-[10px] text-[color:var(--paper-muted)] mt-2 font-mono">{source}</p>}
 </div>
