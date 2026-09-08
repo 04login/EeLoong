@@ -1,5 +1,6 @@
 ---
 // Valuation ratio tile (P/E, P/S, PEG, P/B) for the stock result page.
+import { peSignal, psSignal, pbSignal, pegSignal, type RatioSignal } from "../../lib/stock-research/format.ts";
 interface Props {
 	label: string;
 	value: string;
@@ -7,10 +8,28 @@ interface Props {
 	colorClass?: string;
 }
 const { label, value, source = null, colorClass = "" } = Astro.props;
+
+// Determine which signal function to use based on the label
+function getSignal(label: string, valueStr: string): RatioSignal {
+	const val = parseFloat(valueStr);
+	const num = isNaN(val) ? null : val;
+	const l = label.toLowerCase();
+	if (l.includes("p/e") || l.includes("pe")) return peSignal(num);
+	if (l.includes("p/s") || l.includes("ps")) return psSignal(num);
+	if (l.includes("p/b") || l.includes("pb")) return pbSignal(num);
+	if (l.includes("peg")) return pegSignal(num);
+	// fallback to generic
+	return { textClass: colorClass || "text-[color:var(--paper)]", badgeClass: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]", label: "—" };
+}
+
+const signal = getSignal(label, value);
 ---
 
 <div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-4">
-	<p class="text-xs text-[color:var(--paper-dim)] uppercase tracking-wider mb-1">{label}</p>
-	<p class="text-2xl font-bold {colorClass}">{value}</p>
+	<p class="text-xs text-[color:var(--paper-dim)] uppercase tracking-wider mb-1 flex items-center gap-1.5">
+		{label}
+		<span class={signal.badgeClass + " px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider"}>{signal.label}</span>
+	</p>
+	<p class="text-2xl font-bold {signal.textClass}">{value}</p>
 	{source && <p class="text-[10px] text-[color:var(--paper-muted)] mt-1 font-mono">{source}</p>}
 </div>

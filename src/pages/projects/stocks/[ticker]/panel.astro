@@ -12,6 +12,7 @@ import { env } from "cloudflare:workers";
 import SegmentPanel from "../../../../components/stocks/SegmentPanel.astro";
 import AuditPanel from "../../../../components/stocks/AuditPanel.astro";
 import PhasePlaceholder from "../../../../components/stocks/PhasePlaceholder.astro";
+import ExplanationSection from "../../../../components/stocks/ExplanationSection.astro";
 import {
 	lookupTicker,
 	getSegments,
@@ -94,3 +95,5 @@ if (debugHeader) Astro.response.headers.set("X-Stocks-Debug", debugHeader);
 
 {segments ? <SegmentPanel segments={segments} /> : <PhasePlaceholder title="Segment Revenue Breakdown" icon="mdi:chart-pie" description="No segment revenue available for this company from SEC filings." badge="Phase 2" />}
 {audit ? <AuditPanel audit={audit} /> : <PhasePlaceholder title="Earnings Audit" icon="mdi:file-document-edit" description="One-off item identification unavailable right now (filing fetch or LLM step failed)." badge="Phase 3" />}
+
+<ExplanationSection sections={["segments", "audit"]} />

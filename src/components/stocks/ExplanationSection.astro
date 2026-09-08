@@ -1,0 +1,78 @@
+---
+// Explanation cards for each section of the Stock Research page.
+// Written in plain language — no jargon without definition.
+interface Props {
+  sections: ("valuation" | "segments" | "audit" | "peers" | "fairvalue")[];
+}
+const { sections } = Astro.props;
+
+const explanations: Record<string, { title: string; icon: string; bullets: string[] }> = {
+  valuation: {
+    title: "Valuation Ratios",
+    icon: "mdi:calculator-variant",
+    bullets: [
+      "<strong>P/E (Price-to-Earnings)</strong> — How many dollars you pay for $1 of the company's annual profit. Lower = cheaper, but very low can mean the market expects trouble. <em>Rule of thumb: under 12 is low, 12–25 is reasonable, over 25 is high.</em>",
+      "<strong>P/S (Price-to-Sales)</strong> — How many dollars you pay for $1 of annual revenue. Useful when earnings are negative or volatile. <em>Rule of thumb: under 2 is low, 2–5 is reasonable, over 5 is high.</em>",
+      "<strong>P/B (Price-to-Book)</strong> — How many dollars you pay for $1 of net assets (what the company owns minus what it owes). Below 1 means you're buying assets for less than they're worth on paper. <em>Rule of thumb: under 1 is low, 1–3 is reasonable, over 3 is high.</em>",
+      "<strong>PEG (P/E ÷ Growth Rate)</strong> — P/E adjusted for how fast earnings are growing. A PEG under 1 suggests the price hasn't fully caught up to growth yet. <em>Rule of thumb: under 1 is attractive, 1–1.5 is fair, over 1.5 is expensive.</em>",
+    ],
+  },
+  segments: {
+    title: "Segment Revenue Breakdown",
+    icon: "mdi:chart-pie",
+    bullets: [
+      "Shows <strong>where the money actually comes from</strong> — product lines, business units, or geographies — pulled from the company's latest SEC filing (10-K annual or 10-Q quarterly).",
+      "Each coloured bar is one slice of the revenue pie. The label (e.g. 'iPhone', 'Services', 'Americas') comes from the filing; the length shows that segment's share of total revenue.",
+      "Data source: the XBRL (machine-readable) version of the filing. If that's missing or messy, we fall back to the HTML tables in the segment note. An LLM cleans up the raw labels but never invents numbers.",
+      "If the latest filing is a quarterly 10-Q, the numbers cover the <strong>year-to-date</strong> period (e.g. first half of the year), not a full year. The period date is shown at the top of the panel.",
+    ],
+  },
+  audit: {
+    title: "Earnings Audit",
+    icon: "mdi:file-document-edit",
+    bullets: [
+      "Compares <strong>reported EPS</strong> (what the company announced) with <strong>adjusted EPS</strong> (what profit looks like after removing one-off items).",
+      "One-off items are things like: asset write-downs, restructuring costs, legal settlements, gains/losses from selling a division — stuff that probably won't repeat next year.",
+      "We scan the SEC filing for accounting tags that signal one-offs, then ask an LLM to decide which are truly non-recurring and label them CHARGE (hurt earnings) or GAIN (helped earnings). The LLM never does math — it only labels.",
+      "Adjusted EPS = Reported EPS − (Total one-off impact ÷ Share count). Adjusted P/E and PEG use this cleaner earnings number. If no material one-offs are found, the panel says so honestly.",
+    ],
+  },
+  peers: {
+    title: "Peer Comparison",
+    icon: "mdi:account-group",
+    bullets: [
+      "Shows the same valuation ratios (P/E, P/S, PEG) for a handful of <strong>hand-picked companies in the same sector</strong> — not an algorithmic list, just well-known names that investors usually compare.",
+      "The 'Peer average' row is the simple average of the peers that returned valid data. It's the benchmark used for the Fair Value calculation below.",
+      "If a peer's data is missing or nonsense (e.g. negative P/E), it's dropped from the average. Tickers without a curated peer group show 'not available' rather than a random list.",
+    ],
+  },
+  fairvalue: {
+    title: "Fair Value Band",
+    icon: "mdi:gauge",
+    bullets: [
+      "A <strong>rough price target range</strong> based on: (Peer average P/E) × (This company's EPS) ± 20%.",
+      "The logic: if peers trade at 20× earnings and this company earns $5/share, implied fair value = 20 × $5 = $100. The band is $80–$120 (±20%).",
+      "This is <strong>not a prediction</strong> — it's a sanity check. It assumes the company deserves the same multiple as its peers. Real fair value depends on growth, margins, balance sheet, moat, etc., which this simple formula ignores.",
+      "Only appears when we have a peer average P/E and positive EPS. If either is missing, the panel doesn't show.",
+    ],
+  },
+};
+---
+
+{sections.map((key) => {
+  const ex = explanations[key];
+  return (
+    <details class="mb-6 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-5 shadow-sm group">
+      <summary class="flex items-center gap-3 cursor-pointer list-none text-[color:var(--paper)] font-semibold text-lg select-none">
+        <iconify-icon icon={ex.icon} class="text-[color:var(--accent)] text-2xl flex-shrink-0"></iconify-icon>
+        <span>What is {ex.title}?</span>
+        <iconify-icon icon="mdi:chevron-down" class="ml-auto text-[color:var(--paper-dim)] transition-transform duration-200 group-open:rotate-180"></iconify-icon>
+      </summary>
+      <div class="mt-4 text-sm text-[color:var(--paper-muted)] leading-relaxed space-y-2">
+        {ex.bullets.map((bullet) => (
+          <p class="flex gap-2" set:html={bullet} />
+        ))}
+      </div>
+    </details>
+  );
+})}

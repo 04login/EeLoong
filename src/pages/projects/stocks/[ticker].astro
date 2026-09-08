@@ -4,6 +4,7 @@ import RatioTile from "../../../components/stocks/RatioTile.astro";
 import StatTile from "../../../components/stocks/StatTile.astro";
 import PhasePlaceholder from "../../../components/stocks/PhasePlaceholder.astro";
 import LoadingPanel from "../../../components/stocks/LoadingPanel.astro";
+import ExplanationSection from "../../../components/stocks/ExplanationSection.astro";
 import {
 	lookupTicker,
 	getPeerComparison,
@@ -301,16 +302,21 @@ if (quote) {
 					</div>
 				)}
 				{peers && peers.peers.length > 0 && !fairValue && (
-					<PhasePlaceholder
-						title="Fair Value Band"
-						icon="mdi:gauge"
-						description="Needs a peer-average P/E and positive EPS to compute an implied price."
-						badge="Phase 4"
-					/>
-				)}
-			</>
-		)}
-	</main>
+								<PhasePlaceholder
+									title="Fair Value Band"
+									icon="mdi:gauge"
+									description="Needs a peer-average P/E and positive EPS to compute an implied price."
+									badge="Phase 4"
+								/>
+							)}
+
+							<!-- Explanation Section -->
+							<div class="mb-8">
+								<ExplanationSection sections={["valuation", "segments", "audit", "peers", "fairvalue"]} />
+							</div>
+						</>
+					)}
+				</main>
 
 	<script>
 		// Async panels: replace the two spinner cards with the /panel fragment
