@@ -1,6 +1,6 @@
 ---
-// Valuation ratio tile (P/E, P/S, PEG, P/B) for the stock result page.
-import { peSignal, psSignal, pbSignal, pegSignal, type RatioSignal } from "../../lib/stock-research/format.ts";
+// Valuation ratio tile (P/E, P/S, PEG, P/B, EPS) for the stock result page.
+import { peSignal, psSignal, pbSignal, pegSignal, epsSignal, type RatioSignal } from "../../lib/stock-research/format.ts";
 interface Props {
 	label: string;
 	value: string;
@@ -14,10 +14,11 @@ function getSignal(label: string, valueStr: string): RatioSignal {
 	const val = parseFloat(valueStr);
 	const num = isNaN(val) ? null : val;
 	const l = label.toLowerCase();
-	if (l.includes("p/e") || l.includes("pe")) return peSignal(num);
-	if (l.includes("p/s") || l.includes("ps")) return psSignal(num);
-	if (l.includes("p/b") || l.includes("pb")) return pbSignal(num);
-	if (l.includes("peg")) return pegSignal(num);
+	if (/\beps\b/i.test(l)) return epsSignal(num);
+	if (/\bp\/?e\b/i.test(l)) return peSignal(num);
+	if (/\bp\/?s\b/i.test(l)) return psSignal(num);
+	if (/\bp\/?b\b/i.test(l)) return pbSignal(num);
+	if (/\bpeg\b/i.test(l)) return pegSignal(num);
 	// fallback to generic
 	return { textClass: colorClass || "text-[color:var(--paper)]", badgeClass: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]", label: "—", barPosition: 50, barColor: "gray" };
 }
@@ -25,20 +26,25 @@ function getSignal(label: string, valueStr: string): RatioSignal {
 const signal = getSignal(label, value);
 
 const isNA = signal.barColor === "gray";
-// Consistent full-spectrum gradient from High (top: --accent) to Low (bottom: --success)
-// with mid-range fair value (--warning). Gray fallback for N/A.
+// Full-spectrum gradient:
+// For valuation ratios (P/E, P/S, PEG, P/B): Low is cheap/good (green at bottom), High is expensive (red at top).
+// For inverted metrics (EPS): Low/negative is bad (red at bottom), High is profitable/good (green at top).
 const barStyle = isNA
 	? "background: linear-gradient(to top, var(--ink-700), var(--ink-500));"
-	: "background: linear-gradient(to top, var(--success), var(--warning), var(--accent));";
+	: signal.inverted
+		? "background: linear-gradient(to top, var(--accent), var(--warning), var(--success));"
+		: "background: linear-gradient(to top, var(--success), var(--warning), var(--accent));";
 
 // Zone label for the pointer tag (left of bar)
-const zoneLabels: Record<string, string> = {
-	green: "LOW",
-	yellow: "FAIR",
-	red: "HIGH",
-	gray: "N/A",
-};
-const pointerLabel = zoneLabels[signal.barColor] || signal.label.toUpperCase();
+const pointerLabel = signal.label && signal.label !== "—"
+	? signal.label.toUpperCase()
+	: signal.barColor === "green"
+		? "LOW"
+		: signal.barColor === "yellow"
+			? "FAIR"
+			: signal.barColor === "red"
+				? "HIGH"
+				: "N/A";
 const pointerColors: Record<string, string> = {
 	green: "bg-[color:var(--success)] text-white",
 	yellow: "bg-[color:var(--warning)] text-[color:var(--ink-900)]",
@@ -46,6 +52,7 @@ const pointerColors: Record<string, string> = {
 	gray: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]",
 };
 const pointerBg = pointerColors[signal.barColor] || "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]";
+const valueColorClass = colorClass || signal.textClass;
 ---
 
 <div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-4">
@@ -53,7 +60,7 @@ const pointerBg = pointerColors[signal.barColor] || "bg-[color:var(--ink-700)] t
 		<!-- Left: Ratio label and value -->
 		<div class="flex-1 min-w-0">
 			<p class="text-xs text-[color:var(--paper-dim)] uppercase tracking-wider mb-1">{label}</p>
-			<p class={`text-2xl font-bold ${signal.textClass} truncate`}>{value}</p>
+			<p class={`text-2xl font-bold ${valueColorClass} truncate`}>{value}</p>
 			{source && <p class="text-[10px] text-[color:var(--paper-muted)] mt-1 font-mono">{source}</p>}
 		</div>
 
