@@ -4,6 +4,7 @@ import RatioTile from "../../../components/stocks/RatioTile.astro";
 import StatTile from "../../../components/stocks/StatTile.astro";
 import PhasePlaceholder from "../../../components/stocks/PhasePlaceholder.astro";
 import LoadingPanel from "../../../components/stocks/LoadingPanel.astro";
+import ExplanationModal from "../../../components/stocks/ExplanationModal.astro";
 import {
 	lookupTicker,
 	getPeerComparison,
@@ -132,12 +133,14 @@ if (quote) {
 								<iconify-icon icon="mdi:calculator-variant" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
 								Valuation Ratios
 								<button
-									class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] focus:outline-none rounded-lg p-1"
+									type="button"
+									class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] hover:bg-[color:var(--ink-800)] focus:outline-none rounded-lg p-1 transition-colors cursor-pointer inline-flex items-center justify-center"
 									aria-label="What are Valuation Ratios?"
-								onclick="toggleExplanation('valuation')"
+									data-info-key="valuation"
+									onclick="toggleExplanation('valuation')"
 								>
-										<iconify-icon icon="mdi:information-outline" class="text-1xl text-[color:var(--accent)]"></iconify-icon>
-									</button>
+									<iconify-icon icon="mdi:information-outline" class="text-lg text-[color:var(--accent)]"></iconify-icon>
+								</button>
 							</h2>
 						</div>
 
@@ -221,12 +224,14 @@ if (quote) {
 								<iconify-icon icon="mdi:account-group" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
 								Peer Comparison
 								<button
-									class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] focus:outline-none rounded-lg p-1"
+									type="button"
+									class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] hover:bg-[color:var(--ink-800)] focus:outline-none rounded-lg p-1 transition-colors cursor-pointer inline-flex items-center justify-center"
 									aria-label="What is Peer Comparison?"
-								onclick="toggleExplanation('peers')"
+									data-info-key="peers"
+									onclick="toggleExplanation('peers')"
 								>
-										<iconify-icon icon="mdi:information-outline" class="text-1xl text-[color:var(--accent)]"></iconify-icon>
-									</button>
+									<iconify-icon icon="mdi:information-outline" class="text-lg text-[color:var(--accent)]"></iconify-icon>
+								</button>
 							</h2>
 							<span class="text-xs text-[color:var(--paper-dim)]">{peers.peers.length} peers · live</span>
 						</div>
@@ -289,12 +294,14 @@ if (quote) {
 								<iconify-icon icon="mdi:gauge" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
 								Fair Value
 								<button
-									class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] focus:outline-none rounded-lg p-1"
+									type="button"
+									class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] hover:bg-[color:var(--ink-800)] focus:outline-none rounded-lg p-1 transition-colors cursor-pointer inline-flex items-center justify-center"
 									aria-label="What is Fair Value Band?"
-								onclick="toggleExplanation('fairvalue')"
+									data-info-key="fairvalue"
+									onclick="toggleExplanation('fairvalue')"
 								>
-										<iconify-icon icon="mdi:information-outline" class="text-1xl text-[color:var(--accent)]"></iconify-icon>
-									</button>
+									<iconify-icon icon="mdi:information-outline" class="text-lg text-[color:var(--accent)]"></iconify-icon>
+								</button>
 							</h2>
 							<span class="text-xs text-[color:var(--paper-dim)]">{fairValue.formula}</span>
 						</div>
@@ -334,155 +341,8 @@ if (quote) {
 								/>
 							)}
 
-							<!-- Explanation Section -->
-							<div class="mb-8">
-								<!-- Compact help/question buttons (replaces full <details> cards) -->
-<div class="mb-8 flex flex-wrap gap-3 pt-4 border-t border-[color:var(--ink-700)]">
-  <button
-    class="flex items-center gap-2 text-[color:var(--paper-dim)] hover:text-[color:var(--paper)] transition-colors hover:bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg px-3 py-1 text-sm focus:outline-none focus:bg-[color:var(--ink-850)]"
-    aria-label="What is Valuation Ratios?"
-    onclick="toggleExplanation('valuation')"
-  >
-    <iconify-icon icon="mdi:calculator-variant" class="text-[color:var(--accent)] text-xs"></iconify-icon>
-    <span>Valuation Ratios</span>
-  </button>
-  <button
-    class="flex items-center gap-2 text-[color:var(--paper-dim)] hover:text-[color:var(--paper)] transition-colors hover:bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg px-3 py-1 text-sm focus:outline-none focus:bg-[color:var(--ink-850)]"
-    aria-label="What is Segment Revenue Breakdown?"
-    onclick="toggleExplanation('segments')"
-  >
-    <iconify-icon icon="mdi:chart-pie" class="text-[color:var(--accent)] text-xs"></iconify-icon>
-    <span>Segment Revenue</span>
-  </button>
-  <button
-    class="flex items-center gap-2 text-[color:var(--paper-dim)] hover:text-[color:var(--paper)] transition-colors hover:bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg px-3 py-1 text-sm focus:outline-none focus:bg-[color:var(--ink-850)]"
-    aria-label="What is Earnings Audit?"
-    onclick="toggleExplanation('audit')"
-  >
-    <iconify-icon icon="mdi:file-document-edit" class="text-[color:var(--accent)] text-xs"></iconify-icon>
-    <span>Earnings Audit</span>
-  </button>
-  <button
-    class="flex items-center gap-2 text-[color:var(--paper-dim)] hover:text-[color:var(--paper)] transition-colors hover:bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg px-3 py-1 text-sm focus:outline-none focus:bg-[color:var(--ink-850)]"
-    aria-label="What is Peer Comparison?"
-    onclick="toggleExplanation('peers')"
-  >
-    <iconify-icon icon="mdi:account-group" class="text-[color:var(--accent)] text-xs"></iconify-icon>
-    <span>Peer Comparison</span>
-  </button>
-  <button
-    class="flex items-center gap-2 text-[color:var(--paper-dim)] hover:text-[color:var(--paper)] transition-colors hover:bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg px-3 py-1 text-sm focus:outline-none focus:bg-[color:var(--ink-850)]"
-    aria-label="What is Fair Value Band?"
-    onclick="toggleExplanation('fairvalue')"
-  >
-    <iconify-icon icon="mdi:gauge" class="text-[color:var(--accent)] text-xs"></iconify-icon>
-    <span>Fair Value</span>
-  </button>
-</div>
-
-<!-- Valuation Ratios Explanation -->
-<div id="explanation-valuation" class="absolute right-6 top-full bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-4 shadow-lg w-72 text-sm text-[color:var(--paper)] z-50 hidden" role="dialog" aria-modal="true">
-  <div class="flex justify-between items-start mb-4">
-    <h3 class="font-semibold text-[color:var(--paper)]">Valuation Ratios</h3>
-    <button class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] focus:outline-none" aria-label="Close explanation" onclick="document.getElementById('explanation-valuation').classList.add('hidden')">
-      <iconify-icon icon="mdi:close" class="text-2xl"></iconify-icon>
-    </button>
-  </div>
-  <ul class="space-y-2">
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>These ratios tell you <strong>how expensive or cheap a stock looks</strong> relative to its earnings, sales, assets, or growth. They're quick filters — not final verdicts.</li>
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>Each ratio tile below shows a <strong>gradient bar</strong>: green = cheap/attractive zone, yellow = fair/reasonable, red = expensive. The white marker shows where this stock sits.</li>
-  </ul>
-  <div class="mt-4 overflow-x-auto">
-    <table class="w-full text-xs border border-[color:var(--ink-700)] rounded-lg overflow-hidden">
-      <thead>
-        <tr class="bg-[color:var(--ink-900)] text-left text-[color:var(--paper-dim)] font-semibold uppercase tracking-wider border-b border-[color:var(--ink-700)]">
-          <th class="p-3">Ratio</th><th class="p-3">Low (Green)</th><th class="p-3">Mid / Fair (Yellow)</th><th class="p-3">High (Red)</th><th class="p-3">Context & Practical Rules</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-[color:var(--ink-700)]">
-        <tr class="bg-[color:var(--ink-900)]"><td class="p-3 font-mono font-semibold text-[color:var(--paper)]">P/E (Price-to-Earnings)</td><td class="p-3 text-green-400">< 12–15</td><td class="p-3 text-yellow-300">15 – 25</td><td class="p-3 text-red-400">> 25–30+</td><td class="p-3 text-[color:var(--paper-muted)]">Historical S&P 500 average ~18–22. High P/E is typical for tech/growth; low P/E common for mature banks, energy, utilities.</td></tr>
-        <tr class="bg-[color:var(--ink-850)]"><td class="p-3 font-mono font-semibold text-[color:var(--paper)]">PEG (P/E ÷ Growth Rate)</td><td class="p-3 text-green-400">< 1.0</td><td class="p-3 text-yellow-300">1.0 – 1.5</td><td class="p-3 text-red-400">> 2.0</td><td class="p-3 text-[color:var(--paper-muted)]">Adjusts P/E for earnings growth. PEG < 1 suggests undervalued relative to growth; > 2 suggests overvaluation. Only meaningful with positive growth.</td></tr>
-        <tr class="bg-[color:var(--ink-900)]"><td class="p-3 font-mono font-semibold text-[color:var(--paper)]">P/B (Price-to-Book)</td><td class="p-3 text-green-400">< 1.0</td><td class="p-3 text-yellow-300">1.0 – 3.0</td><td class="p-3 text-red-400">> 3.0–5.0+</td><td class="p-3 text-[color:var(--paper-muted)]">Compares price to net assets (book value). < 1 = buying under liquidation value (common in distressed/financials). Asset-light tech often > 10.</td></tr>
-        <tr class="bg-[color:var(--ink-850)]"><td class="p-3 font-mono font-semibold text-[color:var(--paper)]">P/S (Price-to-Sales)</td><td class="p-3 text-green-400">< 1–2</td><td class="p-3 text-yellow-300">2 – 4</td><td class="p-3 text-red-400">> 6–10+</td><td class="p-3 text-[color:var(--paper-muted)]">Used for unprofitable growth or high-margin software. Low P/S = cheap revenue; high P/S = paying premium for growth/margins.</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- Segment Revenue Explanation -->
-<div id="explanation-segments" class="absolute right-6 top-full bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-4 shadow-lg w-72 text-sm text-[color:var(--paper)] z-50 hidden" role="dialog" aria-modal="true">
-  <div class="flex justify-between items-start mb-4">
-    <h3 class="font-semibold text-[color:var(--paper)]">Segment Revenue Breakdown</h3>
-    <button class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] focus:outline-none" aria-label="Close explanation" onclick="document.getElementById('explanation-segments').classList.add('hidden')">
-      <iconify-icon icon="mdi:close" class="text-2xl"></iconify-icon>
-    </button>
-  </div>
-  <ul class="space-y-2">
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>Shows where the money actually comes from — product lines, business units, or geographies — pulled from the company's latest SEC filing (10-K annual or 10-Q quarterly).</li>
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>Each coloured bar is one slice of the revenue pie. The label (e.g. 'iPhone', 'Services', 'Americas') comes from the filing; the length shows that segment's share of total revenue.</li>
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>Data source: the XBRL (machine-readable) version of the filing. If that's missing or messy, we fall back to the HTML tables in the segment note. An LLM cleans up the raw labels but never invents numbers.</li>
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>If the latest filing is a quarterly 10-Q, the numbers cover the year-to-date period (e.g. first half of the year), not a full year. The period date is shown at the top of the panel.</li>
-  </ul>
-</div>
-
-<!-- Earnings Audit Explanation -->
-<div id="explanation-audit" class="absolute right-6 top-full bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-4 shadow-lg w-72 text-sm text-[color:var(--paper)] z-50 hidden" role="dialog" aria-modal="true">
-  <div class="flex justify-between items-start mb-4">
-    <h3 class="font-semibold text-[color:var(--paper)]">Earnings Audit</h3>
-    <button class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] focus:outline-none" aria-label="Close explanation" onclick="document.getElementById('explanation-audit').classList.add('hidden')">
-      <iconify-icon icon="mdi:close" class="text-2xl"></iconify-icon>
-    </button>
-  </div>
-  <ul class="space-y-2">
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>Compares reported EPS (what the company announced) with adjusted EPS (what profit looks like after removing one-off items).</li>
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>One-off items are things like: asset write-downs, restructuring costs, legal settlements, gains/losses from selling a division — stuff that probably won't repeat next year.</li>
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>We scan the SEC filing for accounting tags that signal one-offs, then ask an LLM to decide which are truly non-recurring and label them CHARGE (hurt earnings) or GAIN (helped earnings). The LLM never does math — it only labels.</li>
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>Adjusted EPS = Reported EPS − (Total one-off impact ÷ Share count). Adjusted P/E and PEG use this cleaner earnings number. If no material one-offs are found, the panel says so honestly.</li>
-  </ul>
-</div>
-
-<!-- Peer Comparison Explanation -->
-<div id="explanation-peers" class="absolute right-6 top-full bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-4 shadow-lg w-72 text-sm text-[color:var(--paper)] z-50 hidden" role="dialog" aria-modal="true">
-  <div class="flex justify-between items-start mb-4">
-    <h3 class="font-semibold text-[color:var(--paper)]">Peer Comparison</h3>
-    <button class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] focus:outline-none" aria-label="Close explanation" onclick="document.getElementById('explanation-peers').classList.add('hidden')">
-      <iconify-icon icon="mdi:close" class="text-2xl"></iconify-icon>
-    </button>
-  </div>
-  <ul class="space-y-2">
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>Shows the same valuation ratios (P/E, P/S, PEG) for a handful of <strong>hand-picked companies in the same sector</strong> — not an algorithmic list, just well-known names that investors usually compare.</li>
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>The 'Peer average' row is the simple average of the peers that returned valid data. It's the benchmark used for the Fair Value calculation below.</li>
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>If a peer's data is missing or nonsense (e.g. negative P/E), it's dropped from the average. Tickers without a curated peer group show 'not available' rather than a random list.</li>
-  </ul>
-</div>
-
-<!-- Fair Value Explanation -->
-<div id="explanation-fairvalue" class="absolute right-6 top-full bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-4 shadow-lg w-72 text-sm text-[color:var(--paper)] z-50 hidden" role="dialog" aria-modal="true">
-  <div class="flex justify-between items-start mb-4">
-    <h3 class="font-semibold text-[color:var(--paper)]">Fair Value Band</h3>
-    <button class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] focus:outline-none" aria-label="Close explanation" onclick="document.getElementById('explanation-fairvalue').classList.add('hidden')">
-      <iconify-icon icon="mdi:close" class="text-2xl"></iconify-icon>
-    </button>
-  </div>
-  <ul class="space-y-2">
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>A <strong>rough price target range</strong> based on: (Peer average P/E) × (This company's EPS) ± 20%.</li>
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>The logic: if peers trade at 20× earnings and this company earns $5/share, implied fair value = 20 × $5 = $100. The band is $80–$120 (±20%).</li>
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>This is <strong>not a prediction</strong> — it's a sanity check. It assumes the company deserves the same multiple as its peers. Real fair value depends on growth, margins, balance sheet, moat, etc., which this simple formula ignores.</li>
-    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>Only appears when we have a peer average P/E and positive EPS. If either is missing, the panel doesn't show.</li>
-  </ul>
-</div>
-
-<script>
-function toggleExplanation(key) {
-  const panel = document.getElementById(`explanation-${key}`);
-  if (panel.classList.contains('hidden')) {
-    panel.classList.remove('hidden');
-  } else {
-    panel.classList.add('hidden');
-  }
-}
-</script>
-							</div>
+							<!-- Metric Guides & Explanation Modal -->
+							<ExplanationModal showGuideBar={true} />
 						</>
 					)}
 				</main>

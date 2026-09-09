@@ -1,0 +1,258 @@
+---
+// Reusable Explanation Modal & Guide Buttons for Stock Research
+interface Props {
+  showGuideBar?: boolean;
+}
+
+const { showGuideBar = true } = Astro.props;
+
+const explanations = [
+  {
+    key: "valuation",
+    title: "Valuation Ratios",
+    icon: "mdi:calculator-variant",
+    bullets: [
+      "These ratios tell you <strong>how expensive or cheap a stock looks</strong> relative to its earnings, sales, assets, or growth. They are quick filters — not final verdicts.",
+      "Each ratio tile on the page shows a <strong>gradient bar</strong>: green = low/cheap zone, yellow = fair/reasonable, red = high/expensive. The white marker line shows where this stock sits on that spectrum.",
+    ],
+    table: {
+      headers: ["Ratio", "Low (Green)", "Mid / Fair (Yellow)", "High (Red)", "Context & Practical Rules"],
+      rows: [
+        ["P/E (Price-to-Earnings)", "< 12–15", "15 – 25", "> 25–30+", "Historical S&P 500 average ~18–22. High P/E is typical for tech/growth companies; low P/E is common for mature banks, energy, and utilities."],
+        ["PEG (P/E ÷ Growth Rate)", "< 1.0", "1.0 – 1.5", "> 2.0", "Adjusts P/E for earnings growth. PEG < 1 suggests undervaluation relative to growth; > 2 suggests overvaluation. Only meaningful with positive growth."],
+        ["P/B (Price-to-Book)", "< 1.0", "1.0 – 3.0", "> 3.0–5.0+", "Compares price to net assets (book value). < 1 = buying under liquidation value (common in financials). Asset-light tech is often > 10."],
+        ["P/S (Price-to-Sales)", "< 1–2", "2 – 4", "> 6–10+", "Useful for high-growth or software companies with fluctuating margins. Low P/S = cheap revenue; high P/S = paying a premium for growth."],
+      ],
+    },
+  },
+  {
+    key: "segments",
+    title: "Segment Revenue Breakdown",
+    icon: "mdi:chart-pie",
+    bullets: [
+      "Shows <strong>where the company's revenue actually comes from</strong> — product lines, business divisions, or geographic markets — pulled directly from SEC filings (10-K annual or 10-Q quarterly).",
+      "Each coloured bar represents one slice of the revenue pie. The label comes from the official filing; the bar length reflects that segment's share of total revenue.",
+      "Data source: the XBRL (machine-readable) data from SEC EDGAR. If missing or incomplete, we parse the HTML tables in the segment footnotes. AI standardizes messy labels but never alters numbers.",
+      "If the latest filing is a quarterly 10-Q, the numbers reflect the <strong>year-to-date</strong> period stated at the top of the panel.",
+    ],
+  },
+  {
+    key: "audit",
+    title: "Earnings Audit",
+    icon: "mdi:file-document-edit",
+    bullets: [
+      "Compares <strong>reported EPS</strong> (official GAAP earnings) with <strong>adjusted EPS</strong> (underlying profit after stripping out one-off, non-recurring items).",
+      "One-off items include things like goodwill impairments, restructuring costs, legal settlements, or asset sale gains/losses that don't reflect normal operating performance.",
+      "We scan SEC filings for unusual accounting items, verify whether they are truly non-recurring, and classify them as CHARGE (hurt reported earnings) or GAIN (boosted reported earnings).",
+      "Adjusted EPS = Reported EPS − (Total one-offs ÷ Shares). If no material one-offs were found in the period, the panel reports that cleanly.",
+    ],
+  },
+  {
+    key: "peers",
+    title: "Peer Comparison",
+    icon: "mdi:account-group",
+    bullets: [
+      "Compares valuation ratios (P/E, P/S, PEG) against a curated group of <strong>direct industry competitors</strong>.",
+      "The 'Peer average' row calculates the average across active peers with valid data. It serves as the benchmark for the Fair Value calculation.",
+      "Peers with invalid or negative values are excluded from the peer average calculation to prevent distorted multiples.",
+    ],
+  },
+  {
+    key: "fairvalue",
+    title: "Fair Value Band",
+    icon: "mdi:gauge",
+    bullets: [
+      "A <strong>relative valuation sanity check</strong> computed as: (Peer Average P/E) × (Company EPS) with a ±20% band.",
+      "The logic: if peer companies trade at an average of 20× earnings and this company earns $5/share, implied fair value is $100, yielding an $80–$120 estimated band.",
+      "This is a comparative baseline, not financial advice. True fair value depends on competitive moats, balance sheet strength, margin trends, and return on invested capital.",
+      "Only displays when both a valid peer average P/E and positive company EPS are available.",
+    ],
+  },
+];
+---
+
+{showGuideBar && (
+  <div class="mb-8 p-5 bg-[color:var(--ink-850)] border border-[color:var(--ink-700)] rounded-xl">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+      <h3 class="text-sm font-semibold text-[color:var(--paper)] flex items-center gap-2">
+        <iconify-icon icon="mdi:help-circle-outline" class="text-[color:var(--accent)] text-lg"></iconify-icon>
+        Metric Guides &amp; Definitions
+      </h3>
+      <span class="text-xs text-[color:var(--paper-dim)]">Click any section to view explanation &amp; benchmark rules</span>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      {explanations.map((ex) => (
+        <button
+          type="button"
+          data-info-key={ex.key}
+          class="flex items-center gap-2 text-xs font-medium text-[color:var(--paper-dim)] hover:text-[color:var(--paper)] bg-[color:var(--ink-900)] hover:bg-[color:var(--ink-800)] border border-[color:var(--ink-700)] hover:border-[color:var(--accent)]/50 rounded-lg px-3 py-1.5 transition-colors cursor-pointer"
+        >
+          <iconify-icon icon={ex.icon} class="text-[color:var(--accent)] text-sm"></iconify-icon>
+          <span>{ex.title}</span>
+        </button>
+      ))}
+    </div>
+  </div>
+)}
+
+<!-- Explanation Modal Dialog -->
+<div
+  id="explanation-modal"
+  class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden items-center justify-center p-4 sm:p-6"
+  role="dialog"
+  aria-modal="true"
+  aria-hidden="true"
+>
+  <div
+    id="explanation-modal-card"
+    class="bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden transform transition-all duration-200 scale-95 opacity-0"
+  >
+    <!-- Modal Header -->
+    <div class="flex items-center justify-between px-5 py-4 border-b border-[color:var(--ink-700)] bg-[color:var(--ink-900)]">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-[color:var(--ink-800)] border border-[color:var(--ink-700)] flex items-center justify-center flex-shrink-0">
+          <iconify-icon id="explanation-modal-icon" icon="mdi:information-outline" class="text-[color:var(--accent)] text-xl"></iconify-icon>
+        </div>
+        <h3 id="explanation-modal-title" class="text-lg font-bold text-[color:var(--paper)]">Explanation</h3>
+      </div>
+      <button
+        id="explanation-modal-close"
+        type="button"
+        class="text-[color:var(--paper-dim)] hover:text-[color:var(--paper)] hover:bg-[color:var(--ink-800)] rounded-lg p-1.5 transition-colors focus:outline-none cursor-pointer"
+        aria-label="Close modal"
+      >
+        <iconify-icon icon="mdi:close" class="text-2xl"></iconify-icon>
+      </button>
+    </div>
+
+    <!-- Modal Content -->
+    <div id="explanation-modal-body" class="p-6 overflow-y-auto space-y-4 text-sm text-[color:var(--paper-muted)] leading-relaxed">
+      <!-- Content populated dynamically -->
+    </div>
+  </div>
+</div>
+
+<!-- Inline script guarantees window.toggleExplanation and click delegation work everywhere -->
+<script is:inline define:vars={{ explanationsData: explanations }}>
+  (function() {
+    const dataMap = {};
+    explanationsData.forEach(function(item) {
+      dataMap[item.key] = item;
+    });
+
+    function openModal(key) {
+      const item = dataMap[key];
+      if (!item) return;
+
+      const modal = document.getElementById('explanation-modal');
+      const card = document.getElementById('explanation-modal-card');
+      const titleEl = document.getElementById('explanation-modal-title');
+      const iconEl = document.getElementById('explanation-modal-icon');
+      const bodyEl = document.getElementById('explanation-modal-body');
+
+      if (!modal || !card || !titleEl || !iconEl || !bodyEl) return;
+
+      titleEl.textContent = item.title;
+      iconEl.setAttribute('icon', item.icon);
+
+      let contentHtml = '<ul class="space-y-3">';
+      item.bullets.forEach(function(bullet) {
+        contentHtml += '<li class="flex items-start gap-2.5">' +
+          '<span class="w-1.5 h-1.5 rounded-full bg-[color:var(--accent)] mt-2 flex-shrink-0"></span>' +
+          '<span>' + bullet + '</span>' +
+          '</li>';
+      });
+      contentHtml += '</ul>';
+
+      if (item.table) {
+        contentHtml += '<div class="mt-5 overflow-x-auto rounded-lg border border-[color:var(--ink-700)]">' +
+          '<table class="w-full text-xs text-left">' +
+          '<thead>' +
+          '<tr class="bg-[color:var(--ink-900)] text-[color:var(--paper-dim)] font-semibold uppercase tracking-wider border-b border-[color:var(--ink-700)]">';
+        item.table.headers.forEach(function(h) {
+          contentHtml += '<th class="p-3">' + h + '</th>';
+        });
+        contentHtml += '</tr></thead><tbody class="divide-y divide-[color:var(--ink-700)]">';
+
+        item.table.rows.forEach(function(row, i) {
+          const bg = i % 2 === 0 ? 'bg-[color:var(--ink-900)]' : 'bg-[color:var(--ink-850)]';
+          contentHtml += '<tr class="' + bg + '">';
+          row.forEach(function(cell, ci) {
+            let colorClass = 'text-[color:var(--paper-muted)]';
+            if (ci === 0) colorClass = 'font-mono font-semibold text-[color:var(--paper)]';
+            else if (ci === 1) colorClass = 'text-green-400 font-medium';
+            else if (ci === 2) colorClass = 'text-yellow-300 font-medium';
+            else if (ci === 3) colorClass = 'text-red-400 font-medium';
+            contentHtml += '<td class="p-3 ' + colorClass + '">' + cell + '</td>';
+          });
+          contentHtml += '</tr>';
+        });
+        contentHtml += '</tbody></table></div>';
+      }
+
+      bodyEl.innerHTML = contentHtml;
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('overflow-hidden');
+
+      requestAnimationFrame(function() {
+        card.classList.remove('scale-95', 'opacity-0');
+        card.classList.add('scale-100', 'opacity-100');
+      });
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('explanation-modal');
+      const card = document.getElementById('explanation-modal-card');
+      if (!modal || !card) return;
+
+      card.classList.remove('scale-100', 'opacity-100');
+      card.classList.add('scale-95', 'opacity-0');
+
+      setTimeout(function() {
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('overflow-hidden');
+      }, 150);
+    }
+
+    // Expose globally so onclick="toggleExplanation('...')" works everywhere
+    window.toggleExplanation = openModal;
+    window.openExplanationModal = openModal;
+    window.closeExplanationModal = closeModal;
+
+    // Delegated click listener handles all buttons (including async loaded ones)
+    document.addEventListener('click', function(e) {
+      const btn = e.target.closest('[data-info-key]');
+      if (btn) {
+        e.preventDefault();
+        const key = btn.getAttribute('data-info-key');
+        if (key) openModal(key);
+        return;
+      }
+
+      // Close button
+      if (e.target.closest('#explanation-modal-close')) {
+        e.preventDefault();
+        closeModal();
+        return;
+      }
+
+      // Backdrop click outside card
+      const modal = document.getElementById('explanation-modal');
+      if (modal && e.target === modal) {
+        closeModal();
+      }
+    });
+
+    // ESC key closes modal
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        closeModal();
+      }
+    });
+  })();
+</script>

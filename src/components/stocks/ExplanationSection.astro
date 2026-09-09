@@ -1,115 +1,13 @@
-// Explanation cards for each section of the Stock Research page.
-// Written in plain language — no jargon without definition.
-// Now rendered as compact help/question-buttons that open a modal on click.
+---
+// Re-export ExplanationModal for compatibility
+import ExplanationModal from "./ExplanationModal.astro";
+
 interface Props {
-  sections: ("valuation" | "segments" | "audit" | "peers" | "fairvalue")[];
+  sections?: ("valuation" | "segments" | "audit" | "peers" | "fairvalue")[];
+  showGuideBar?: boolean;
 }
-const { sections } = Astro.props;
 
-const explanations: Record<string, { title: string; icon: string; bullets: string[]; table?: { headers: string[]; rows: string[][] } }> = {
-  valuation: {
-    title: "Valuation Ratios",
-    icon: "mdi:calculator-variant",
-    bullets: [
-      "These ratios tell you <strong>how expensive or cheap a stock looks</strong> relative to its earnings, sales, assets, or growth. They're quick filters — not final verdicts.",
-      "Each ratio tile below shows a <strong>gradient bar</strong>: green = cheap/attractive zone, yellow = fair/reasonable, red = expensive. The white marker shows where this stock sits.",
-    ],
-    table: {
-      headers: ["Ratio", "Low (Green)", "Mid / Fair (Yellow)", "High (Red)", "Context & Practical Rules"],
-      rows: [
-        ["P/E (Price-to-Earnings)", "< 12–15", "15 – 25", "> 25–30+", "Historical S&P 500 average ~18–22. High P/E is typical for tech/growth; low P/E common for mature banks, energy, utilities."],
-        ["PEG (P/E ÷ Growth Rate)", "< 1.0", "1.0 – 1.5", "> 2.0", "Adjusts P/E for earnings growth. PEG < 1 suggests undervalued relative to growth; > 2 suggests overvaluation. Only meaningful with positive growth."],
-        ["P/B (Price-to-Book)", "< 1.0", "1.0 – 3.0", "> 3.0–5.0+", "Compares price to net assets (book value). < 1 = buying under liquidation value (common in distressed/financials). Asset-light tech often > 10."],
-        ["P/S (Price-to-Sales)", "< 1–2", "2 – 4", "> 6–10+", "Used for unprofitable growth or high-margin software. Low P/S = cheap revenue; high P/S = paying premium for growth/margins."],
-      ],
-    },
-  },
-  segments: {
-    title: "Segment Revenue Breakdown",
-    icon: "mdi:chart-pie",
-    bullets: [
-      "Shows <strong>where the money actually comes from</strong> — product lines, business units, or geographies — pulled from the company's latest SEC filing (10-K annual or 10-Q quarterly).",
-      "Each coloured bar is one slice of the revenue pie. The label (e.g. 'iPhone', 'Services', 'Americas') comes from the filing; the length shows that segment's share of total revenue.",
-      "Data source: the XBRL (machine-readable) version of the filing. If that's missing or messy, we fall back to the HTML tables in the segment note. An LLM cleans up the raw labels but never invents numbers.",
-      "If the latest filing is a quarterly 10-Q, the numbers cover the <strong>year-to-date</strong> period (e.g. first half of the year), not a full year. The period date is shown at the top of the panel.",
-    ],
-  },
-  audit: {
-    title: "Earnings Audit",
-    icon: "mdi:file-document-edit",
-    bullets: [
-      "Compares <strong>reported EPS</strong> (what the company announced) with <strong>adjusted EPS</strong> (what profit looks like after removing one-off items).",
-      "One-off items are things like: asset write-downs, restructuring costs, legal settlements, gains/losses from selling a division — stuff that probably won't repeat next year.",
-      "We scan the SEC filing for accounting tags that signal one-offs, then ask an LLM to decide which are truly non-recurring and label them CHARGE (hurt earnings) or GAIN (helped earnings). The LLM never does math — it only labels.",
-      "Adjusted EPS = Reported EPS − (Total one-off impact ÷ Share count). Adjusted P/E and PEG use this cleaner earnings number. If no material one-offs are found, the panel says so honestly.",
-    ],
-  },
-  peers: {
-    title: "Peer Comparison",
-    icon: "mdi:account-group",
-    bullets: [
-      "Shows the same valuation ratios (P/E, P/S, PEG) for a handful of <strong>hand-picked companies in the same sector</strong> — not an algorithmic list, just well-known names that investors usually compare.",
-      "The 'Peer average' row is the simple average of the peers that returned valid data. It's the benchmark used for the Fair Value calculation below.",
-      "If a peer's data is missing or nonsense (e.g. negative P/E), it's dropped from the average. Tickers without a curated peer group show 'not available' rather than a random list.",
-    ],
-  },
-  fairvalue: {
-    title: "Fair Value Band",
-    icon: "mdi:gauge",
-    bullets: [
-      "A <strong>rough price target range</strong> based on: (Peer average P/E) × (This company's EPS) ± 20%.",
-      "The logic: if peers trade at 20× earnings and this company earns $5/share, implied fair value = 20 × $5 = $100. The band is $80–$120 (±20%).",
-      "This is <strong>not a prediction</strong> — it's a sanity check. It assumes the company deserves the same multiple as its peers. Real fair value depends on growth, margins, balance sheet, moat, etc., which this simple formula ignores.",
-      "Only appears when we have a peer average P/E and positive EPS. If either is missing, the panel doesn't show.",
-    ],
-  },
-};
+const { showGuideBar = true } = Astro.props;
+---
 
-// Render each section as a compact help button that opens a modal
-{sections.map((key) => {
-  const ex = explanations[key];
-  return (
-    <div class=\"mb-6 flex items-center gap-3\">
-      <button
-        class=\"flex items-center gap-2 text-[color:var(--paper-dim)] hover:text-[color:var(--paper)] transition-colors hover:bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg px-3 py-1 text-sm focus:outline-none focus:bg-[color:var(--ink-850)]\"
-        aria-label=\"What is ${ex.title}?\"
-        onclick=\"window.open('', '_blank')\"  // placeholder - actual modal handled by client script
-      >
-        <iconify-icon icon={ex.icon} class=\"text-[color:var(--accent)] text-xs\"></iconify-icon>
-        <span>{ex.title}</span>
-      </button>
-      <div class=\"hidden md:block ml-4 text-xs text-[color:var(--paper-muted)]\" aria-describedby=\"explanation-${key}\">
-        ${ex.bullets.map((bullet) => `<p>{bullet}</p>`).join('')}
-      </div>
-      <div id=\"explanation-${key}\" class=\"absolute right-6 top-full bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-4 shadow-lg w-64 text-sm text-[color:var(--paper)] z-50 hidden\" role=\"dialog\" aria-modal=\"true\">
-        <div class=\"flex justify-between items-start mb-4\">
-          <h3 class=\"font-semibold text-[color:var(--paper)]\">{ex.title}</h3>
-          <button class=\"text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] focus:outline-none\" aria-label=\"Close explanation\" onclick=\"this.parentElement.parentElement.parentElement.classList.add('hidden')\">
-            <iconify-icon icon=\"mdi:close\" class=\"text-2xl\"></iconify-icon>
-          </button>
-        </div>
-        <ul class=\"space-y-2\">
-          {ex.bullets.map((bullet) => (<li key=\"bullet\" class=\"flex gap-2\"><span class=\"w-1 h-1 rounded bg-[color:var(--accent)]\"></span>{bullet}</li>)}
-        </ul>
-        {ex.table && (
-          <div class=\"mt-4 overflow-x-auto\">
-            <table class=\"w-full text-xs border border-[color:var:var(--ink-700)] rounded-lg overflow-hidden\">
-              <thead>
-                {ex.table.headers.map((h) => <th class=\"p-3\">{h}</th>)}
-              </thead>
-              <tbody>
-                {ex.table.rows.map((row, i) => (
-                  <tr class={i % 2 === 0 ? \"bg-[color:var(--ink-900)]\" : \"bg-[color:var(--ink-850)]\"}>
-                    {row.map((cell, ci) => (
-                      <td class={`p-3 ${ci === 0 ? 'font-mono font-semibold text-[color:var:var(--paper)]' : ci === 1 ? 'text-green-400' : ci === 2 ? 'text-yellow-300' : ci === 3 ? 'text-red-400' : 'text-[color:var:var(--paper-muted)]`}>{cell}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-})}
+<ExplanationModal showGuideBar={showGuideBar} />
