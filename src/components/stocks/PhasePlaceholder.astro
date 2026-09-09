@@ -5,8 +5,9 @@ interface Props {
 	icon: string;
 	description: string;
 	badge?: string;
+	helpKey?: string; // Optional: key for explanation modal
 }
-const { title, icon, description, badge = "Phase 2+" } = Astro.props;
+const { title, icon, description, badge = "Phase 2+", helpKey } = Astro.props;
 ---
 
 <div class="bg-[color:var(--ink-850)] border border-[color:var(--ink-700)] border-dashed rounded-xl p-5">
@@ -18,6 +19,15 @@ const { title, icon, description, badge = "Phase 2+" } = Astro.props;
 			<h3 class="font-semibold text-[color:var(--paper-dim)]">{title}</h3>
 			<p class="text-sm text-[color:var(--paper-muted)] mt-1">{description}</p>
 		</div>
+		{helpKey && (
+			<button
+				class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] focus:outline-none rounded-lg p-1"
+				aria-label={"What is " + title + "?"}
+				onclick={`toggleExplanation('${helpKey}')`}
+			>
+				<iconify-icon icon="mdi:information-outline" class="text-1xl text-[color:var(--accent)]"></iconify-icon>
+			</button>
+		)}
 		<span class="flex-shrink-0 px-2 py-1 text-[10px] font-bold text-[color:var(--ink-500)] bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded">{badge}</span>
 	</div>
 </div>

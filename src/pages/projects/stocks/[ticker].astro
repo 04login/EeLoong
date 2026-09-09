@@ -127,10 +127,19 @@ if (quote) {
 				<!-- Fundamentals Card -->
 				{fundamentals && (
 					<div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
-						<h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2 mb-5">
-							<iconify-icon icon="mdi:calculator-variant" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
-							Valuation Ratios
-						</h2>
+						<div class="flex justify-between items-start mb-5">
+							<h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2">
+								<iconify-icon icon="mdi:calculator-variant" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
+								Valuation Ratios
+								<button
+									class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] focus:outline-none rounded-lg p-1"
+									aria-label="What are Valuation Ratios?"
+								onclick="toggleExplanation('valuation')"
+								>
+										<iconify-icon icon="mdi:information-outline" class="text-1xl text-[color:var(--accent)]"></iconify-icon>
+									</button>
+							</h2>
+						</div>
 
 						<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
 							<RatioTile
@@ -192,12 +201,14 @@ if (quote) {
 							icon="mdi:chart-pie"
 							description="Segment data is US-only for now — SEC filings don't cover SGX/HK listings."
 							badge="Phase 2"
+							helpKey="segments"
 						/>
 						<PhasePlaceholder
 							title="Earnings Audit"
 							icon="mdi:file-document-edit"
 							description="Filing audit is US-only for now — SEC filings don't cover SGX/HK listings."
 							badge="Phase 3"
+							helpKey="audit"
 						/>
 					</>
 				)}
@@ -209,6 +220,13 @@ if (quote) {
 							<h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2">
 								<iconify-icon icon="mdi:account-group" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
 								Peer Comparison
+								<button
+									class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] focus:outline-none rounded-lg p-1"
+									aria-label="What is Peer Comparison?"
+								onclick="toggleExplanation('peers')"
+								>
+										<iconify-icon icon="mdi:information-outline" class="text-1xl text-[color:var(--accent)]"></iconify-icon>
+									</button>
 							</h2>
 							<span class="text-xs text-[color:var(--paper-dim)]">{peers.peers.length} peers · live</span>
 						</div>
@@ -270,6 +288,13 @@ if (quote) {
 							<h2 class="text-xl font-bold text-[color:var(--paper)] flex items-center gap-2">
 								<iconify-icon icon="mdi:gauge" class="text-[color:var(--accent)] text-2xl"></iconify-icon>
 								Fair Value
+								<button
+									class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] focus:outline-none rounded-lg p-1"
+									aria-label="What is Fair Value Band?"
+								onclick="toggleExplanation('fairvalue')"
+								>
+										<iconify-icon icon="mdi:information-outline" class="text-1xl text-[color:var(--accent)]"></iconify-icon>
+									</button>
 							</h2>
 							<span class="text-xs text-[color:var(--paper-dim)]">{fairValue.formula}</span>
 						</div>
