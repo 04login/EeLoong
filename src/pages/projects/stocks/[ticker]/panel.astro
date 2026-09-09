@@ -12,7 +12,6 @@ import { env } from "cloudflare:workers";
 import SegmentPanel from "../../../../components/stocks/SegmentPanel.astro";
 import AuditPanel from "../../../../components/stocks/AuditPanel.astro";
 import PhasePlaceholder from "../../../../components/stocks/PhasePlaceholder.astro";
-import ExplanationSection from "../../../../components/stocks/ExplanationSection.astro";
 import {
 	lookupTicker,
 	getSegments,
@@ -96,4 +95,63 @@ if (debugHeader) Astro.response.headers.set("X-Stocks-Debug", debugHeader);
 {segments ? <SegmentPanel segments={segments} /> : <PhasePlaceholder title="Segment Revenue Breakdown" icon="mdi:chart-pie" description="No segment revenue available for this company from SEC filings." badge="Phase 2" />}
 {audit ? <AuditPanel audit={audit} /> : <PhasePlaceholder title="Earnings Audit" icon="mdi:file-document-edit" description="One-off item identification unavailable right now (filing fetch or LLM step failed)." badge="Phase 3" />}
 
-<ExplanationSection sections={["segments", "audit"]} />
+<!-- Compact help/question buttons for segments + audit (replaces full <details> cards)-->
+<div class="mb-4 flex items-center gap-3 pt-4 border-t border-[color:var(--ink-700)]">
+  <button
+    class="flex items-center gap-2 text-[color:var(--paper-dim)] hover:text-[color:var(--paper)] transition-colors hover:bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg px-3 py-1 text-sm focus:outline-none focus:bg-[color:var(--ink-850)]"
+    aria-label="What is Segment Revenue Breakdown?"
+    onclick="toggleExplanation('segments')"
+  >
+    <iconify-icon icon="mdi:chart-pie" class="text-[color:var(--accent)] text-xs"></iconify-icon>
+    <span>Segment Revenue</span>
+  </button>
+  <button
+    class="flex items-center gap-2 text-[color:var(--paper-dim)] hover:text-[color:var(--paper)] transition-colors hover:bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg px-3 py-1 text-sm focus:outline-none focus:bg-[color:var(--ink-850)]"
+    aria-label="What is Earnings Audit?"
+    onclick="toggleExplanation('audit')"
+  >
+    <iconify-icon icon="mdi:file-document-edit" class="text-[color:var(--accent)] text-xs"></iconify-icon>
+    <span>Earnings Audit</span>
+  </button>
+</div>
+
+<div id="explanation-segments" class="absolute right-6 top-full bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-4 shadow-lg w-64 text-sm text-[color:var(--paper)] z-50 hidden" role="dialog" aria-modal="true">
+  <div class="flex justify-between items-start mb-4">
+    <h3 class="font-semibold text-[color:var(--paper)]">Segment Revenue Breakdown</h3>
+    <button class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] focus:outline-none" aria-label="Close explanation" onclick="document.getElementById('explanation-segments').classList.add('hidden')">
+      <iconify-icon icon="mdi:close" class="text-2xl"></iconify-icon>
+    </button>
+  </div>
+  <ul class="space-y-2">
+    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>Shows where the money actually comes from — product lines, business units, or geographies — pulled from the company's latest SEC filing (10-K annual or 10-Q quarterly).</li>
+    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>Each coloured bar is one slice of the revenue pie. The label (e.g. 'iPhone', 'Services', 'Americas') comes from the filing; the length shows that segment's share of total revenue.</li>
+    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>Data source: the XBRL (machine-readable) version of the filing. If that's missing or messy, we fall back to the HTML tables in the segment note. An LLM cleans up the raw labels but never invents numbers.</li>
+    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>If the latest filing is a quarterly 10-Q, the numbers cover the year-to-date period (e.g. first half of the year), not a full year. The period date is shown at the top of the panel.</li>
+  </ul>
+</div>
+
+<div id="explanation-audit" class="absolute right-6 top-full bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-4 shadow-lg w-64 text-sm text-[color:var(--paper)] z-50 hidden" role="dialog" aria-modal="true">
+  <div class="flex justify-between items-start mb-4">
+    <h3 class="font-semibold text-[color:var(--paper)]">Earnings Audit</h3>
+    <button class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] focus:outline-none" aria-label="Close explanation" onclick="document.getElementById('explanation-audit').classList.add('hidden')">
+      <iconify-icon icon="mdi:close" class="text-2xl"></iconify-icon>
+    </button>
+  </div>
+  <ul class="space-y-2">
+    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>Compares reported EPS (what the company announced) with adjusted EPS (what profit looks like after removing one-off items).</li>
+    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>One-off items are things like: asset write-downs, restructuring costs, legal settlements, gains/losses from selling a division — stuff that probably won't repeat next year.</li>
+    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>We scan the SEC filing for accounting tags that signal one-offs, then ask an LLM to decide which are truly non-recurring and label them CHARGE (hurt earnings) or GAIN (helped earnings). The LLM never does math — it only labels.</li>
+    <li class="flex gap-2"><span class="w-1 h-1 rounded bg-[color:var(--accent)]"></span>Adjusted EPS = Reported EPS − (Total one-off impact ÷ Share count). Adjusted P/E and PEG use this cleaner earnings number. If no material one-offs are found, the panel says so honestly.</li>
+  </ul>
+</div>
+
+<script>
+function toggleExplanation(key) {
+  const panel = document.getElementById(`explanation-${key}`);
+  if (panel.classList.contains('hidden')) {
+    panel.classList.remove('hidden');
+  } else {
+    panel.classList.add('hidden');
+  }
+}
+</script>
