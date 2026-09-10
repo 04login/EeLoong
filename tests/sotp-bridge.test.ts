@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   computeBridge,
+  recomputeMultiples,
   type SotpPart,
 } from "../src/lib/stock-research/sotp/model.ts";
 
@@ -43,4 +44,22 @@ test("computeBridge clamps discounts and nulls perShare without positive shares"
 test("computeBridge tolerates undefined bridge numbers", () => {
   const r = computeBridge(100, {}, 10);
   assert.equal(r.equityValue, 100);
+});
+
+const basePart = (over: Partial<SotpPart> = {}): SotpPart => ({
+  label: "p", valuation: 1, note: "", ...over,
+});
+
+test("recomputeMultiples fills valuation from revenueRef × multiple", () => {
+  const parts = [
+    basePart({ label: "Starlink", mode: "multiple", revenueRef: 7.55e9, multiple: 8, valuation: 0 }),
+    basePart({ label: "Manual", valuation: 5e9 }), // no mode → untouched
+    basePart({ label: "Bad multiple", mode: "multiple", revenueRef: 1e9, multiple: 0, valuation: 7 }), // 0 multiple → untouched
+    basePart({ label: "No ref", mode: "multiple", multiple: 4, valuation: 42, revenueRef: null }),
+  ];
+  const out = recomputeMultiples(parts);
+  assert.equal(out[0].valuation, 7.55e9 * 8);
+  assert.equal(out[1].valuation, 5e9);
+  assert.equal(out[2].valuation, 7); // 0 multiple → untouched
+  assert.equal(out[3].valuation, 42); // no ref → untouched
 });

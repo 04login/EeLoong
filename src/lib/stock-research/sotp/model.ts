@@ -8,7 +8,22 @@ export type SotpPart = {
   label: string; // "Starlink" / "iPhone"
   valuation: number; // the user's estimate, currency units. Negative allowed (e.g. net debt).
   note: string; // reasoning, e.g. "8× 2026E revenue of $12B"
+  mode?: "manual" | "multiple"; // absent = manual (backward compatible)
+  revenueRef?: number | null; // e.g. segment revenue backing a multiple
+  multiple?: number; // e.g. 8 → valuation = revenueRef × 8
 };
+
+// Server-authoritative valuation for `multiple` parts: valuation = revenueRef ×
+// multiple. Manual parts (and rows with a missing/zero multiple or no usable
+// revenueRef) are returned untouched.
+export const recomputeMultiples = (parts: SotpPart[]): SotpPart[] =>
+  parts.map((p) =>
+    p.mode === "multiple" &&
+    (p.multiple ?? 0) > 0 &&
+    typeof p.revenueRef === "number" && Number.isFinite(p.revenueRef) && p.revenueRef !== 0
+      ? { ...p, valuation: p.revenueRef * p.multiple! }
+      : p,
+  );
 
 export type SotpModel = {
   slug: string;
@@ -48,16 +63,28 @@ export const parseModelForm = (fd: FormData): Omit<SotpModel, "updatedAt"> => {
   const labels = fd.getAll("partLabel").map(String);
   const vals = fd.getAll("partValuation").map(String);
   const notes = fd.getAll("partNote").map(String);
-  const rows = Math.max(labels.length, vals.length, notes.length);
+  const modes = fd.getAll("partMode").map(String);
+  const multiples = fd.getAll("partMultiple").map(String);
+  const refs = fd.getAll("partRevenueRef").map(String);
+  const rows = Math.max(labels.length, vals.length, notes.length, modes.length, multiples.length, refs.length);
   const parts: SotpPart[] = [];
   for (let i = 0; i < rows && parts.length < MAX_PARTS; i++) {
     const label = (labels[i] ?? "").trim().slice(0, MAX_LABEL);
     if (label === "") continue;
-    parts.push({
+    const part: SotpPart = {
       label,
       valuation: parseNumberInput(vals[i] ?? null) ?? 0,
       note: (notes[i] ?? "").trim().slice(0, MAX_NOTE),
-    });
+    };
+    // Attach the multiple mode ONLY when explicitly selected — a v1 form (no
+    // partMode fields at all) must keep rows exactly `{label, valuation, note}`.
+    if ((modes[i] ?? "").trim() === "multiple") {
+      part.mode = "multiple";
+      part.revenueRef = parseNumberInput(refs[i] ?? null); // null when unparseable
+      const multiple = parseNumberInput(multiples[i] ?? null);
+      if (multiple !== null) part.multiple = multiple;
+    }
+    parts.push(part);
   }
   const importTicker = one("importTicker");
   const importPeriod = one("importPeriod");
@@ -81,14 +108,23 @@ export const sanitizeModel = (raw: Omit<SotpModel, "updatedAt">, now: string): S
   const companyName = raw.companyName.trim().slice(0, MAX_COMPANY);
   if (!companyName) return null;
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(raw.slug)) return null;
-  const parts = (Array.isArray(raw.parts) ? raw.parts : [])
-    .map((p) => ({
-      label: String(p?.label ?? "").trim().slice(0, MAX_LABEL),
-      valuation: typeof p?.valuation === "number" && Number.isFinite(p.valuation) ? p.valuation : 0,
-      note: String(p?.note ?? "").trim().slice(0, MAX_NOTE),
-    }))
+  const cleanParts = (Array.isArray(raw.parts) ? raw.parts : [])
+    .map((p): SotpPart => {
+      const part: SotpPart = {
+        label: String(p?.label ?? "").trim().slice(0, MAX_LABEL),
+        valuation: typeof p?.valuation === "number" && Number.isFinite(p.valuation) ? p.valuation : 0,
+        note: String(p?.note ?? "").trim().slice(0, MAX_NOTE),
+      };
+      if (p?.mode === "multiple") part.mode = "multiple";
+      if (typeof p?.revenueRef === "number" && Number.isFinite(p.revenueRef)) part.revenueRef = p.revenueRef;
+      if (typeof p?.multiple === "number" && Number.isFinite(p.multiple) && p.multiple >= 0) part.multiple = p.multiple;
+      return part;
+    })
     .filter((p) => p.label !== "")
     .slice(0, MAX_PARTS);
+  // Multiple parts get their valuation RE-DERIVED here — the client preview is
+  // cosmetic; this is what actually persists.
+  const parts = recomputeMultiples(cleanParts);
   return {
     slug: raw.slug,
     companyName,
@@ -183,5 +219,6 @@ export const seedPartsFromSegments = (segments: SegmentResult): SotpPart[] => {
       label: r.label.slice(0, MAX_LABEL),
       valuation: 0,
       note: `Segment revenue: ${formatNumber(r.revenue)} (period ${segments.period})`,
+      revenueRef: r.revenue, // raw segment revenue — powers a later × multiple
     }));
 };

@@ -155,3 +155,73 @@ test("seedPartsFromSegments falls back to the first group and returns [] when em
   const empty = { ticker: "X", groups: [], period: "p", source: "none", sourceSummary: null, fyEnd: "p" } as parameters<typeof seedPartsFromSegments>[0];
   assert.deepEqual(seedPartsFromSegments(empty), []);
 });
+
+test("parseModelForm reads part mode/revenueRef/multiple by row index; legacy rows stay v1-shaped", () => {
+  const fd = new FormData();
+  fd.set("slug", "x");
+  fd.set("companyName", "X");
+  fd.append("partLabel", "Starlink");
+  fd.append("partValuation", "0");
+  fd.append("partNote", "");
+  fd.append("partMode", "multiple");
+  fd.append("partMultiple", "8");
+  fd.append("partRevenueRef", "7,550,000,000");
+  fd.append("partLabel", "Manual");
+  fd.append("partValuation", "5");
+  fd.append("partNote", "");
+  fd.append("partMode", "manual");
+  fd.append("partMultiple", "");
+  fd.append("partRevenueRef", "");
+  const m = parseModelForm(fd);
+  assert.equal(m.parts[0].mode, "multiple");
+  assert.equal(m.parts[0].multiple, 8);
+  assert.equal(m.parts[0].revenueRef, 7550000000);
+  // "manual" is not "multiple" → mode omitted; v1 rows carry exactly the three keys
+  assert.deepEqual(m.parts[1], { label: "Manual", valuation: 5, note: "" });
+  const legacy = new FormData();
+  legacy.set("slug", "x");
+  legacy.set("companyName", "X");
+  legacy.append("partLabel", "Old");
+  legacy.append("partValuation", "600");
+  legacy.append("partNote", "n");
+  assert.deepEqual(parseModelForm(legacy).parts[0], { label: "Old", valuation: 600, note: "n" });
+});
+
+test("sanitizeModel keeps valid modes, drops junk refs/multiples, and recomputes multiple valuations", () => {
+  const m = sanitizeModel(
+    {
+      slug: "x",
+      companyName: "X",
+      currency: "USD",
+      sharesOutstanding: 10,
+      parts: [
+        { label: "Starlink", valuation: 0, note: "", mode: "multiple", revenueRef: 7.55e9, multiple: 8 },
+        { label: "Junk mode", valuation: 3, note: "", mode: "weird" as unknown as "manual" },
+        { label: "NaN ref", valuation: 4, note: "", mode: "multiple", revenueRef: Number.NaN, multiple: 5 },
+        { label: "Neg multiple", valuation: 6, note: "", mode: "multiple", revenueRef: 1e9, multiple: -2 },
+      ],
+      importedFrom: null,
+    },
+    "now",
+  );
+  assert.equal(m?.parts[0].valuation, 7.55e9 * 8); // server-authoritative
+  assert.equal(m?.parts[0].mode, "multiple");
+  assert.equal(m?.parts[0].revenueRef, 7.55e9);
+  assert.equal(m?.parts[1].mode, undefined); // invalid mode dropped
+  assert.equal(m?.parts[2].revenueRef, undefined); // non-finite ref dropped
+  assert.equal(m?.parts[2].valuation, 4); // no valid ref → untouched
+  assert.equal(m?.parts[3].multiple, undefined); // negative multiple dropped
+  assert.equal(m?.parts[3].valuation, 6);
+});
+
+test("seedPartsFromSegments carries the raw segment revenue as revenueRef", () => {
+  const segments = {
+    ticker: "X",
+    groups: [{ axisLabel: "By reportable segment", rows: [{ label: "Connectivity", revenue: 7.55e9 }] }],
+    period: "2026-06-30", source: "llm", sourceSummary: null, fyEnd: "2026-06-30",
+  } as parameters<typeof seedPartsFromSegments>[0];
+  const parts = seedPartsFromSegments(segments);
+  assert.equal(parts[0].revenueRef, 7.55e9);
+  assert.equal(parts[0].mode, undefined);
+  assert.equal(parts[0].valuation, 0);
+});
