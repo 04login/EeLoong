@@ -65,3 +65,67 @@ test("create without a company name is a 400", async () => {
   fd.set("action", "create");
   assert.deepEqual(await handleSotpAction(fd, env, asKv(m), { now, seed: noSeed }), { status: 400, error: "Company name is required." });
 });
+
+test("save persists form-edited parts and keeps provenance; 404 on unknown slug", async () => {
+  const m = mockKv();
+  const create = new FormData();
+  create.set("action", "create"); create.set("companyName", "SpaceX"); create.set("seedTicker", "aapl");
+  await handleSotpAction(create, env, asKv(m), { now, seed: appleSeed });
+
+  const save = new FormData();
+  save.set("action", "save");
+  save.set("slug", "spacex");
+  save.set("companyName", "SpaceX Corp");
+  save.set("currency", "USD");
+  save.set("sharesOutstanding", "2,100,000,000");
+  save.set("importTicker", "AAPL");
+  save.set("importPeriod", "2025-06-27");
+  save.append("partLabel", "Starlink"); save.append("partValuation", "$600,000,000,000"); save.append("partNote", "10x rev");
+  save.append("partLabel", "Rockets"); save.append("partValuation", "350000000000"); save.append("partNote", "");
+  const res = await handleSotpAction(save, env, asKv(m), { now, seed: noSeed });
+  assert.deepEqual(res, { status: 303, location: "/projects/valuation-lab/spacex?saved=1" });
+  const saved = await getModel(asKv(m), "spacex");
+  assert.equal(saved?.companyName, "SpaceX Corp");
+  assert.equal(saved?.parts.length, 2);
+  assert.equal(saved?.parts[0].valuation, 600000000000);
+  assert.deepEqual(saved?.importedFrom, { ticker: "AAPL", period: "2025-06-27" });
+
+  const ghost = new FormData();
+  ghost.set("action", "save"); ghost.set("slug", "ghost"); ghost.set("companyName", "G");
+  assert.equal((await handleSotpAction(ghost, env, asKv(m), { now, seed: noSeed })).status, 404);
+});
+
+test("delete removes the model; 404 when absent", async () => {
+  const m = mockKv();
+  const create = new FormData();
+  create.set("action", "create"); create.set("companyName", "SpaceX");
+  await handleSotpAction(create, env, asKv(m), { now, seed: noSeed });
+  const del = new FormData();
+  del.set("action", "delete"); del.set("slug", "spacex");
+  assert.deepEqual(await handleSotpAction(del, env, asKv(m), { now, seed: noSeed }), { status: 303, location: "/projects/valuation-lab?deleted=1" });
+  assert.equal(await getModel(asKv(m), "spacex"), null);
+  const again = new FormData();
+  again.set("action", "delete"); again.set("slug", "spacex");
+  assert.equal((await handleSotpAction(again, env, asKv(m), { now, seed: noSeed })).status, 404);
+});
+
+test("write token: 403 without/with-wrong token when configured, passes when set", async () => {
+  const m = mockKv();
+  const lockedEnv: SotpActionEnv = { OPENROUTER_API_KEY: "stub", SOTP_WRITE_TOKEN: "s3cret" };
+  const fd = new FormData();
+  fd.set("action", "create"); fd.set("companyName", "SpaceX");
+  assert.equal((await handleSotpAction(fd, lockedEnv, asKv(m), { now, seed: noSeed })).status, 403);
+  fd.set("writeToken", "wrong");
+  assert.equal((await handleSotpAction(fd, lockedEnv, asKv(m), { now, seed: noSeed })).status, 403);
+  fd.set("writeToken", "s3cret");
+  assert.equal((await handleSotpAction(fd, lockedEnv, asKv(m), { now, seed: noSeed })).status, 303);
+  // token UNSET → open (local dev convenience)
+  assert.equal((await handleSotpAction(fd, env, asKv(m), { now, seed: noSeed })).status, 303);
+});
+
+test("unknown or missing action is a 400", async () => {
+  const m = mockKv();
+  const fd = new FormData();
+  fd.set("action", "nuke");
+  assert.equal((await handleSotpAction(fd, env, asKv(m), { now, seed: noSeed })).status, 400);
+});

@@ -93,5 +93,20 @@ export async function handleSotpAction(
     return { status: 303, location: `${LAB}/${slug}${flag}` };
   }
 
+  if (action === "save") {
+    const model = sanitizeModel(parseModelForm(fd), now());
+    if (!model) return { status: 400, error: "Invalid model — company name missing." };
+    if (!(await getModel(kv, model.slug))) return { status: 404, error: "Model not found." };
+    await putModel(kv, model);
+    return { status: 303, location: `${LAB}/${model.slug}?saved=1` };
+  }
+
+  if (action === "delete") {
+    const slug = String(fd.get("slug") ?? "").trim();
+    if (!(await getModel(kv, slug))) return { status: 404, error: "Model not found." };
+    await deleteModel(kv, slug);
+    return { status: 303, location: `${LAB}?deleted=1` };
+  }
+
   return { status: 400, error: `Unknown action: ${action || "(none)"}` };
 }
