@@ -93,3 +93,13 @@ export const ratioClass = (v: number | null): string => {
 };
 
 export const cur = (c: string | null): string => (c === "USD" ? "$" : c === "SGD" ? "S$" : "");
+
+// Per-share / absolute price formatting — NO K/M/B compaction (a per-share
+// value of 452,380.95 must not render as "452.38K"). Used by the Valuation Lab.
+export const formatPrice = (n: number | null, decimals = 2): string => {
+  if (n === null || !isFinite(n)) return "—";
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+};
