@@ -115,6 +115,57 @@ export const computeTotals = (model: Pick<SotpModel, "parts" | "sharesOutstandin
   return { total, perShare: shares !== null && shares > 0 ? total / shares : null };
 };
 
+export type SotpBridge = {
+  netDebt: number;           // + = subtract, − = net cash (adds)
+  minorityInterests: number;
+  preferred: number;
+  sotpDiscountPct: number;   // whole % (10 = 10%), clamped 0–30
+  illiquidityPct: number;    // whole %, clamped 0–60
+};
+
+const clampPct = (v: unknown, lo: number, hi: number): number =>
+  typeof v === "number" && Number.isFinite(v) ? Math.min(Math.max(v, lo), hi) : 0;
+
+// computeBridge consumes already-sanitized models in production, so a percent
+// outside [lo,hi] only appears when called directly with junk. Treat it as 0
+// (no discount) rather than amplifying an out-of-range input.
+const validPct = (v: unknown, lo: number, hi: number): number =>
+  typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi ? v : 0;
+
+// Strip binary floating-point noise (83 × 0.9 × 0.8 = 59.760000000000005)
+// to 12 significant figures so division/multiplication chains compare cleanly.
+const round12 = (n: number): number => Number(n.toPrecision(12));
+
+export const computeBridge = (
+  partsTotal: number,
+  bridge: Partial<SotpBridge> | undefined,
+  sharesOutstanding: number | null,
+): {
+  partsTotal: number;
+  afterNetDebt: number;
+  afterInterests: number;
+  afterDiscount: number;
+  equityValue: number;
+  perShare: number | null;
+} => {
+  const netDebt = Number.isFinite(bridge?.netDebt) ? bridge.netDebt! : 0;
+  const minority = Number.isFinite(bridge?.minorityInterests) ? bridge.minorityInterests! : 0;
+  const preferred = Number.isFinite(bridge?.preferred) ? bridge.preferred! : 0;
+  const afterNetDebt = round12(partsTotal - netDebt);
+  const afterInterests = round12(afterNetDebt - minority - preferred);
+  const sotpPct = validPct(bridge?.sotpDiscountPct, 0, 30);
+  const illiqPct = validPct(bridge?.illiquidityPct, 0, 60);
+  const afterDiscount = round12(afterInterests * (1 - sotpPct / 100) * (1 - illiqPct / 100));
+  return {
+    partsTotal,
+    afterNetDebt,
+    afterInterests,
+    afterDiscount,
+    equityValue: afterDiscount,
+    perShare: sharesOutstanding !== null && sharesOutstanding > 0 ? round12(afterDiscount / sharesOutstanding) : null,
+  };
+};
+
 // Turn an SEC segment breakdown into editable parts. Valuations start at 0 —
 // the LLM/XBRL pipeline supplies the STRUCTURE (part names + reported segment
 // revenue as a note); it never supplies a valuation. Prefers the reportable-
