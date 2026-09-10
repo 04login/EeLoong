@@ -7,6 +7,9 @@ type Env = {
 	// Stock-research LLM key (Worker secret / .dev.vars). Optional — llm/client.ts
 	// throws "unavailable" when missing; panels degrade gracefully.
 	OPENROUTER_API_KEY?: string;
+	// Optional write speed-bump for /projects/valuation-lab form posts. Unset →
+	// writes are open (local dev). NOT real auth — see sotp/actions.ts.
+	SOTP_WRITE_TOKEN?: string;
 };
 
 declare module "cloudflare:workers" {
