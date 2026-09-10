@@ -7,6 +7,8 @@ import type { KVNamespace } from "@cloudflare/workers-types/2023-03-03";
 import type { LlmEnv } from "../llm/client.ts";
 import { getSegments } from "../pipeline/segments.ts";
 import type { SegmentResult } from "../pipeline/segments.ts";
+import { tickerToCik } from "../sources/cik-map.ts";
+import { latestPeriodic, fetchBalanceSheetFacts } from "../sources/edgar.ts";
 import { slugify, uniqueSlug } from "./slug.ts";
 import { sanitizeModel, parseModelForm, seedPartsFromSegments, type SotpModel, type SotpPart } from "./model.ts";
 import { getModel, putModel, deleteModel, takenSlugs } from "./store.ts";
@@ -39,6 +41,43 @@ export const seedFromTicker = async (
   }
 };
 
+export type BridgePrefill = {
+  netDebt: number;
+  minorityInterests: number;
+  preferred: number;
+  sharesOutstanding: number;
+  period: string;
+};
+
+// Bridge prefetch — deterministic XBRL extraction of balance-sheet lines:
+// netDebt = (debt current+noncurrent + finance leases) − cash − marketable sec;
+// minority/preferred/shares copied when present. No LLM. Fills ONLY empty
+// fields — never overwrites user input; returns which fields were filled.
+export const prefillBridgeFromEdgar = async (
+  env: SotpActionEnv,
+  kv: KVNamespace | undefined,
+  ticker: string,
+): Promise<BridgePrefill | null> => {
+  const t = ticker.trim().toUpperCase();
+  if (!t) return null;
+  const cikInfo = await tickerToCik(t, kv);
+  if (!cikInfo) return null;
+  const filing = await latestPeriodic(cikInfo.cik);
+  if (!filing) return null;
+  const facts = await fetchBalanceSheetFacts(filing);
+  if (!facts) return null;
+  const debt = (facts.totalDebt ?? 0) + (facts.financeLeases ?? 0);
+  const cash = (facts.cash ?? 0) + (facts.marketableSec ?? 0);
+  const netDebt = debt - cash; // safe even when facts are partially null
+  return {
+    netDebt,
+    minorityInterests: facts.minorityInterest ?? 0,
+    preferred: facts.redeemablePreferred ?? 0,
+    sharesOutstanding: facts.sharesOutstanding ?? 0,
+    period: filing.periodEnd,
+  };
+};
+
 export async function handleSotpAction(
   fd: FormData,
   env: SotpActionEnv,
@@ -46,10 +85,12 @@ export async function handleSotpAction(
   opts: {
     now?: () => string;
     seed?: (env: SotpActionEnv, kv: KVNamespace | undefined, ticker: string) => Promise<{ parts: SotpPart[]; period: string } | null>;
+    prefill?: (env: SotpActionEnv, kv: KVNamespace | undefined, ticker: string) => Promise<BridgePrefill | null>;
   } = {},
 ): Promise<SotpActionResult> {
   const now = opts.now ?? (() => new Date().toISOString());
   const seed = opts.seed ?? seedFromTicker;
+  const prefill = opts.prefill ?? prefillBridgeFromEdgar;
   const action = String(fd.get("action") ?? "").trim();
 
   // Write token: when the secret is configured, every mutating request must
@@ -106,6 +147,46 @@ export async function handleSotpAction(
     if (!(await getModel(kv, slug))) return { status: 404, error: "Model not found." };
     await deleteModel(kv, slug);
     return { status: 303, location: `${LAB}?deleted=1` };
+  }
+
+  if (action === "prefill-bridge") {
+    const slug = String(fd.get("slug") ?? "").trim();
+    const model = await getModel(kv, slug);
+    if (!model) return { status: 404, error: "Model not found." };
+    const ticker = String(fd.get("bridgeTicker") ?? "").trim() || model.importedFrom?.ticker || "";
+    const data = await prefill(env, kv, ticker);
+    if (!data) return { status: 303, location: `${LAB}/${slug}?prefilled=0` };
+
+    // Fill ONLY empty fields. A zero (or missing) bridge line counts as empty;
+    // a user-entered non-zero value is never overwritten.
+    const cur = model.bridge;
+    const keep = (v: number | null | undefined, fallback: number): number =>
+      v === undefined || v === null || v === 0 ? fallback : v;
+    const bridge = {
+      netDebt: keep(cur?.netDebt, data.netDebt),
+      minorityInterests: keep(cur?.minorityInterests, data.minorityInterests),
+      preferred: keep(cur?.preferred, data.preferred),
+      sotpDiscountPct: cur?.sotpDiscountPct ?? 0,
+      illiquidityPct: cur?.illiquidityPct ?? 0,
+    };
+    const sharesOutstanding = model.sharesOutstanding === null && data.sharesOutstanding > 0
+      ? data.sharesOutstanding
+      : model.sharesOutstanding;
+    const updated = sanitizeModel(
+      {
+        slug: model.slug,
+        companyName: model.companyName,
+        currency: model.currency,
+        sharesOutstanding,
+        parts: model.parts,
+        bridge,
+        importedFrom: model.importedFrom,
+      },
+      now(),
+    );
+    if (!updated) return { status: 400, error: "Invalid model." };
+    await putModel(kv, updated);
+    return { status: 303, location: `${LAB}/${slug}?prefilled=1` };
   }
 
   return { status: 400, error: `Unknown action: ${action || "(none)"}` };

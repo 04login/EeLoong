@@ -129,3 +129,45 @@ test("unknown or missing action is a 400", async () => {
   fd.set("action", "nuke");
   assert.equal((await handleSotpAction(fd, env, asKv(m), { now, seed: noSeed })).status, 400);
 });
+
+const bridgeSeed = async () => ({
+  netDebt: -60_600_000_000,
+  minorityInterests: 0,
+  preferred: 2_100_000_000,
+  sharesOutstanding: 13_170_000_000,
+  period: "2026-06-30",
+});
+
+test("prefill-bridge fills only empty fields and stamps provenance", async () => {
+  const m = mockKv();
+  const create = new FormData();
+  create.set("action", "create"); create.set("companyName", "SpaceX"); create.set("seedTicker", "SPCX");
+  await handleSotpAction(create, env, asKv(m), { now, seed: appleSeed });
+  // bridge starts empty; shares unset
+  const save = new FormData();
+  save.set("action", "save"); save.set("slug", "spacex"); save.set("companyName", "SpaceX");
+  save.set("preferred", "123"); // user already set this one
+  await handleSotpAction(save, env, asKv(m), { now, seed: noSeed });
+  const pre = new FormData();
+  pre.set("action", "prefill-bridge");
+  pre.set("slug", "spacex");
+  pre.set("bridgeTicker", "SPCX");
+  const res = await handleSotpAction(pre, env, asKv(m), { now, seed: noSeed, prefill: bridgeSeed });
+  assert.deepEqual(res, { status: 303, location: "/projects/valuation-lab/spacex?prefilled=1" });
+  const saved = await getModel(asKv(m), "spacex");
+  assert.equal(saved?.bridge?.netDebt, -60_600_000_000); // was empty → filled
+  assert.equal(saved?.bridge?.preferred, 123); // was user-set → untouched
+  assert.equal(saved?.sharesOutstanding, 13_170_000_000); // was null → filled
+  assert.equal(saved?.bridge?.sotpDiscountPct, 0);
+});
+
+test("prefill-bridge with no retrievable data redirects ?prefilled=none and changes nothing", async () => {
+  const m = mockKv();
+  const create = new FormData();
+  create.set("action", "create"); create.set("companyName", "SpaceX");
+  await handleSotpAction(create, env, asKv(m), { now, seed: noSeed });
+  const pre = new FormData();
+  pre.set("action", "prefill-bridge"); pre.set("slug", "spacex");
+  const res = await handleSotpAction(pre, env, asKv(m), { now, seed: noSeed, prefill: async () => null });
+  assert.deepEqual(res, { status: 303, location: "/projects/valuation-lab/spacex?prefilled=0" });
+});
