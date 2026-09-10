@@ -86,11 +86,14 @@ export async function handleSotpAction(
     now?: () => string;
     seed?: (env: SotpActionEnv, kv: KVNamespace | undefined, ticker: string) => Promise<{ parts: SotpPart[]; period: string } | null>;
     prefill?: (env: SotpActionEnv, kv: KVNamespace | undefined, ticker: string) => Promise<BridgePrefill | null>;
+    segmentSource?: (env: SotpActionEnv, kv: KVNamespace | undefined, ticker: string) => Promise<SegmentResult | null>;
   } = {},
 ): Promise<SotpActionResult> {
   const now = opts.now ?? (() => new Date().toISOString());
   const seed = opts.seed ?? seedFromTicker;
   const prefill = opts.prefill ?? prefillBridgeFromEdgar;
+  const segmentSource =
+    opts.segmentSource ?? ((e: SotpActionEnv, k: KVNamespace | undefined, t: string) => getSegments(e, k, t));
   const action = String(fd.get("action") ?? "").trim();
 
   // Write token: when the secret is configured, every mutating request must
@@ -187,6 +190,62 @@ export async function handleSotpAction(
     if (!updated) return { status: 400, error: "Invalid model." };
     await putModel(kv, updated);
     return { status: 303, location: `${LAB}/${slug}?prefilled=1` };
+  }
+
+  if (action === "append-segments") {
+    const slug = String(fd.get("slug") ?? "").trim();
+    const model = await getModel(kv, slug);
+    if (!model) return { status: 404, error: "Model not found." };
+    const ticker = String(fd.get("segTicker") ?? "").trim() || model.importedFrom?.ticker || "";
+
+    let segments: SegmentResult | null = null;
+    try {
+      segments = await segmentSource(env, kv, ticker);
+    } catch {
+      segments = null; // best-effort: missing filing / no key / EDGAR down
+    }
+    const seeded = segments ? seedPartsFromSegments(segments) : [];
+    if (seeded.length === 0) {
+      return { status: 303, location: `${LAB}/${slug}?segments=0` };
+    }
+
+    const key = (s: string): string => s.trim().toLowerCase();
+    const seededByLabel = new Map(seeded.map((s) => [key(s.label), s]));
+    const existing = new Set(model.parts.map((p) => key(p.label)));
+
+    // Fill revenue refs on existing parts whose label matches, but ONLY when the
+    // part has no ref yet — never clobber a user-entered one. Valuation/mode/note
+    // are left exactly as the user had them.
+    const parts: SotpPart[] = model.parts.map((p) => {
+      const match = seededByLabel.get(key(p.label));
+      if (match && match.revenueRef != null && (p.revenueRef === null || p.revenueRef === undefined)) {
+        return { ...p, revenueRef: match.revenueRef };
+      }
+      return p;
+    });
+    // Append seeded segments that aren't already present. Manual by default (no
+    // mode) so the user opts into × revenue; the ref is already prefilled.
+    for (const s of seeded) {
+      if (!existing.has(key(s.label))) {
+        parts.push({ label: s.label, valuation: 0, note: s.note, revenueRef: s.revenueRef });
+      }
+    }
+
+    const updated = sanitizeModel(
+      {
+        slug: model.slug,
+        companyName: model.companyName,
+        currency: model.currency,
+        sharesOutstanding: model.sharesOutstanding,
+        parts,
+        bridge: model.bridge,
+        importedFrom: model.importedFrom,
+      },
+      now(),
+    );
+    if (!updated) return { status: 400, error: "Invalid model." };
+    await putModel(kv, updated);
+    return { status: 303, location: `${LAB}/${slug}?segments=1` };
   }
 
   return { status: 400, error: `Unknown action: ${action || "(none)"}` };
