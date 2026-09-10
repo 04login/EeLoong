@@ -148,6 +148,31 @@ async function instanceDocName(acc: string, cikInt: number, primaryDoc: string):
   return `${base}_htm.xml`;
 }
 
+// Shared instance-XML fetch: folder-listing discovery + download + sanity check.
+// `label` is the trace prefix so each caller keeps its own debug wording.
+// Returns the raw instance text, or null (with a trace entry) on any failure.
+async function fetchInstanceXml(
+  filing: LatestFiling,
+  trace: Trace | undefined,
+  label: string,
+): Promise<string | null> {
+  const xmlPath = await instanceDocName(filing.acc, Number(filing.cik), filing.primaryDoc);
+  if (!xmlPath) {
+    trace?.log(`${label} — no instance doc for filing`, { acc: filing.acc });
+    return null;
+  }
+  trace?.log(`${label} — fetching XBRL instance`, { file: xmlPath });
+  const xml = await fetchSecArchive(`${filing.cik}/${filing.acc}/${xmlPath}`).catch((e) => {
+    trace?.log(`${label} — XBRL instance fetch failed`, { file: xmlPath, error: String(e) });
+    return "";
+  });
+  if (!xml || xml.length < 1000) {
+    trace?.log(`${label} — XBRL instance empty/short`, { file: xmlPath, len: xml?.length ?? 0 });
+    return null;
+  }
+  return xml;
+}
+
 export function parseXbrlContexts(xml: string): Map<string, { members: XbrlMember[]; endDate: string }> {
   const map = new Map<string, { members: XbrlMember[]; endDate: string }>();
   const ctxRe = /<context\b[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/context>/g;
@@ -257,20 +282,8 @@ export async function fetchXbrlSegmentRows(
   filing: LatestFiling,
   trace?: Trace,
 ): Promise<{ period: string; groups: { axis: string; rows: { label: string; value: number }[] }[] } | null> {
-  const xmlPath = await instanceDocName(filing.acc, Number(filing.cik), filing.primaryDoc);
-  if (!xmlPath) {
-    trace?.log("edgar: segments — no instance doc for filing", { acc: filing.acc });
-    return null;
-  }
-  trace?.log("edgar: segments — fetching XBRL instance", { file: xmlPath });
-  const xml = await fetchSecArchive(`${filing.cik}/${filing.acc}/${xmlPath}`).catch((e) => {
-    trace?.log("edgar: segments — XBRL instance fetch failed", { file: xmlPath, error: String(e) });
-    return "";
-  });
-  if (!xml || xml.length < 1000) {
-    trace?.log("edgar: segments — XBRL instance empty/short", { file: xmlPath, len: xml?.length ?? 0 });
-    return null;
-  }
+  const xml = await fetchInstanceXml(filing, trace, "edgar: segments");
+  if (!xml) return null;
   const ctxs = parseXbrlContexts(xml);
   const facts = parseXbrlNumericFacts(xml);
   trace?.log("edgar: segments — XBRL parsed", { contexts: ctxs.size, revenueFacts: facts.length });
@@ -301,20 +314,8 @@ export async function fetchXbrlOneOffFacts(
   filing: LatestFiling,
   trace?: Trace,
 ): Promise<{ period: string; rows: { label: string; value: number }[] } | null> {
-  const xmlPath = await instanceDocName(filing.acc, Number(filing.cik), filing.primaryDoc);
-  if (!xmlPath) {
-    trace?.log("edgar: audit — no instance doc for filing", { acc: filing.acc });
-    return null;
-  }
-  trace?.log("edgar: audit — fetching XBRL instance", { file: xmlPath });
-  const xml = await fetchSecArchive(`${filing.cik}/${filing.acc}/${xmlPath}`).catch((e) => {
-    trace?.log("edgar: audit — XBRL instance fetch failed", { file: xmlPath, error: String(e) });
-    return "";
-  });
-  if (!xml || xml.length < 1000) {
-    trace?.log("edgar: audit — XBRL instance empty/short", { file: xmlPath, len: xml?.length ?? 0 });
-    return null;
-  }
+  const xml = await fetchInstanceXml(filing, trace, "edgar: audit");
+  if (!xml) return null;
 
   const ctxs = parseXbrlContexts(xml);
   const facts = parseXbrlNumericFacts(xml, ONE_OFF_TAG_RE);
@@ -345,6 +346,121 @@ export async function fetchXbrlOneOffFacts(
 
   const rows = [...byLabel.entries()].map(([label, v]) => ({ label, value: v.value }));
   return { period: fyEnd || [...byLabel.values()][0].period, rows };
+}
+
+// ---- Balance-sheet facts (SOTP equity bridge prefill) ----
+
+export type BridgeFacts = {
+  cash: number | null;
+  marketableSec: number | null;
+  totalDebt: number | null;
+  financeLeases: number | null;
+  minorityInterest: number | null;
+  redeemablePreferred: number | null;
+  sharesOutstanding: number | null;
+  periodEnd: string;
+};
+
+// Deterministic tag lookup over the instance XML: no LLM. Newest instant wins;
+// dimensional (segment) facts are ignored; raw filing units (never scaled).
+// Values in the instance document are RAW dollars (the R-file HTML is in
+// millions but the XML is not) — this reads the XML, so units are consistent.
+export function pickBalanceSheetFacts(xml: string): BridgeFacts {
+  // 1. Contexts: instant date + dimensional flag (<segment> child present).
+  const instantByCtx = new Map<string, string>();
+  const dimCtx = new Set<string>();
+  const ctxRe = /<context\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/context>/g;
+  let c: RegExpExecArray | null;
+  while ((c = ctxRe.exec(xml))) {
+    const id = c[1];
+    const body = c[2];
+    if (/<segment\b/i.test(body)) dimCtx.add(id);
+    const instant = /<instant>([^<]+)<\/instant>/.exec(body);
+    if (instant) instantByCtx.set(id, instant[1]);
+  }
+
+  // 2. Numeric facts. Attribute names are case-sensitive in XML but filings
+  //    vary; match `contextRef`/`contextref` with an /i flag. The closing-tag
+  //    backreference and `[\w.-]+` prefix class mirror parseXbrlNumericFacts
+  //    (a `[A-Za-z0-9_]+` prefix drops every us-gaap fact).
+  const factRe = /<([\w.-]+):([\w.-]+)\b[^>]*\bcontextref="([^"]+)"[^>]*>(-?[0-9]+(?:\.[0-9]+)?)<\/\1:\2>/gi;
+  const latestByTag = new Map<string, { value: number; period: string }>();
+  let m: RegExpExecArray | null;
+  while ((m = factRe.exec(xml))) {
+    const tag = m[2];
+    const value = Number(m[4]);
+    const contextRef = m[3];
+    if (!Number.isFinite(value)) continue;
+    if (dimCtx.has(contextRef)) continue; // segment-level restatement — ignore
+    const period = instantByCtx.get(contextRef) ?? "";
+    const existing = latestByTag.get(tag);
+    if (!existing || period > existing.period) latestByTag.set(tag, { value, period });
+  }
+
+  const value = (tagNames: string[]): number | null => {
+    for (const t of tagNames) {
+      const hit = latestByTag.get(t);
+      if (hit) return hit.value;
+    }
+    return null;
+  };
+
+  const cash = value(["CashAndCashEquivalents", "CashAndCashEquivalentsAtCarryingValue"]);
+  const marketableSec = value(["MarketableSecuritiesCurrent", "ShortTermInvestments"]);
+  const debtCurrent = value(["LongTermDebtCurrent"]);
+  const debtNoncurrent = value(["LongTermDebtNoncurrent"]);
+  const totalDebt =
+    debtCurrent !== null || debtNoncurrent !== null
+      ? (debtCurrent ?? 0) + (debtNoncurrent ?? 0)
+      : value(["LongTermDebt"]);
+  const financeLeases = value(["FinanceLeaseLiability", "FinanceLeaseLiabilityNoncurrent"]);
+  const minorityInterest = value(["MinorityInterest", "MinoritiesInterest"]);
+  const redeemablePreferred = value(["RedeemableConvertiblePreferredStockValue"]);
+  const sharesOutstanding = value(["EntityCommonStockSharesOutstanding"]);
+
+  // Newest balance-sheet date across the non-dimensional contexts.
+  const periodEnd = [...instantByCtx.entries()]
+    .filter(([id]) => !dimCtx.has(id))
+    .map(([, date]) => date)
+    .sort()
+    .pop() ?? "";
+
+  return {
+    cash,
+    marketableSec,
+    totalDebt,
+    financeLeases,
+    minorityInterest,
+    redeemablePreferred,
+    sharesOutstanding,
+    periodEnd,
+  };
+}
+
+// Fetch the latest periodic filing's instance XML and pull the balance-sheet
+// lines used by the SOTP equity-bridge prefill. No LLM call. Returns null when
+// the instance can't be fetched or contains none of the relevant tags.
+export async function fetchBalanceSheetFacts(filing: LatestFiling, trace?: Trace): Promise<BridgeFacts | null> {
+  const xml = await fetchInstanceXml(filing, trace, "edgar: balance-sheet");
+  if (!xml) return null;
+  const facts = pickBalanceSheetFacts(xml);
+  const found = [
+    facts.cash,
+    facts.marketableSec,
+    facts.totalDebt,
+    facts.financeLeases,
+    facts.minorityInterest,
+    facts.redeemablePreferred,
+    facts.sharesOutstanding,
+  ].filter((v) => v !== null).length;
+  trace?.log("edgar: balance-sheet — parsed", {
+    tagMatches: found,
+    cash: facts.cash,
+    totalDebt: facts.totalDebt,
+    shares: facts.sharesOutstanding,
+    period: facts.periodEnd,
+  });
+  return found > 0 ? facts : null;
 }
 
 // ---- HTML fallback: rendered financial statements ----
