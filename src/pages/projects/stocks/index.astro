@@ -56,6 +56,16 @@ if (q.length >= 1) {
       </p>
     </form>
 
+    <!-- Sum-of-the-parts manual valuation -->
+    <a href="/projects/valuation-lab" class="mb-8 flex items-center gap-4 p-5 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] hover:border-[color:var(--accent)] rounded-xl transition group max-w-2xl">
+      <iconify-icon icon="mdi:calculator-variant" class="text-3xl text-[color:var(--accent)]"></iconify-icon>
+      <span>
+        <span class="block font-semibold text-[color:var(--paper)]">Valuation Lab — sum of the parts</span>
+        <span class="block text-sm text-[color:var(--paper-dim)]">Manually value any company (even unlisted): list its parts, estimate each one, divide by shares outstanding.</span>
+      </span>
+      <iconify-icon icon="mdi:chevron-right" class="ml-auto text-2xl text-[color:var(--paper-dim)] group-hover:text-[color:var(--accent)]"></iconify-icon>
+    </a>
+
     {error && (
       <div class="mb-6 p-4 bg-[color:var(--ink-850)] border border-[color:var(--accent)]/30 rounded-lg text-[color:var(--accent)]">
         {error}
