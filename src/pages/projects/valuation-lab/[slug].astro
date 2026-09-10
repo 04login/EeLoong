@@ -17,6 +17,7 @@ const url = new URL(Astro.request.url);
 const saved = url.searchParams.get("saved") === "1";
 const importFailed = url.searchParams.get("import") === "failed";
 const prefilled = url.searchParams.get("prefilled");
+const segmentsFlag = url.searchParams.get("segments");
 ---
 
 <html lang="en">
@@ -71,6 +72,16 @@ const prefilled = url.searchParams.get("prefilled");
 						Nothing new to prefill — no usable balance-sheet data from the latest filing, or those fields were already set.
 					</div>
 				)}
+				{segmentsFlag === "1" && (
+					<div class="mb-6 p-4 bg-[color:var(--ink-850)] border border-green-400/40 rounded-lg text-green-400 text-sm">
+						Segment rows filled/appended — revenue refs are prefilled where labels matched; set each × multiple.
+					</div>
+				)}
+				{segmentsFlag === "0" && (
+					<div class="mb-6 p-4 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-lg text-[color:var(--paper-dim)] text-sm">
+						No segment data found for that ticker (missing filing, or the LLM step has not cached this ticker yet) — nothing changed.
+					</div>
+				)}
 				{model.importedFrom && (
 					<p class="mb-6 text-xs text-[color:var(--paper-muted)] italic">
 						Parts seeded from {model.importedFrom.ticker} segment revenue (period {model.importedFrom.period}) — valuations are yours to fill in.
@@ -107,7 +118,18 @@ const prefilled = url.searchParams.get("prefilled");
 						</label>
 					</div>
 
-					<h2 class="text-lg font-bold text-[color:var(--paper)] mb-3">Parts</h2>
+					<div class="mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+						<h2 class="text-lg font-bold text-[color:var(--paper)]">Parts</h2>
+						<div class="flex items-center gap-2">
+							<input type="text" form="append-segments-form" name="segTicker" value={model.importedFrom?.ticker ?? ""} maxlength="20" placeholder="AAPL"
+								class="w-28 bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 font-mono uppercase text-sm text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)]" />
+							<button type="submit" form="append-segments-form"
+								class="inline-flex items-center gap-2 px-4 py-2 border border-[color:var(--ink-600)] bg-[color:var(--ink-800)] hover:border-[color:var(--accent)] rounded-lg text-sm font-semibold transition cursor-pointer">
+								<iconify-icon icon="mdi:table-import" class="text-lg text-[color:var(--accent)]"></iconify-icon>
+								Fill segment rows
+							</button>
+						</div>
+					</div>
 					<div class="overflow-x-auto">
 						<table class="w-full text-sm">
 							<thead>
@@ -326,6 +348,12 @@ const prefilled = url.searchParams.get("prefilled");
 						{writeToken && <input type="hidden" name="writeToken" value={writeToken} />}
 					</form>
 				)}
+
+				<form id="append-segments-form" method="POST" action="/projects/valuation-lab/actions" class="hidden">
+					<input type="hidden" name="action" value="append-segments" />
+					<input type="hidden" name="slug" value={model.slug} />
+					{writeToken && <input type="hidden" name="writeToken" value={writeToken} />}
+				</form>
 
 				<form method="POST" action="/projects/valuation-lab/actions" class="mt-4"
 					onsubmit="return confirm('Delete this model? This cannot be undone.')">
