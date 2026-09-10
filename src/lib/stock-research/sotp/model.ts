@@ -73,3 +73,33 @@ export const parseModelForm = (fd: FormData): Omit<SotpModel, "updatedAt"> => {
       : null,
   };
 };
+
+// Validation + clamping boundary. Everything from the client goes through
+// this before touching KV: sizes capped, junk dropped, shape rebuilt. Returns
+// null when the model is unusable (caller maps to 400).
+export const sanitizeModel = (raw: Omit<SotpModel, "updatedAt">, now: string): SotpModel | null => {
+  const companyName = raw.companyName.trim().slice(0, MAX_COMPANY);
+  if (!companyName) return null;
+  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(raw.slug)) return null;
+  const parts = (Array.isArray(raw.parts) ? raw.parts : [])
+    .map((p) => ({
+      label: String(p?.label ?? "").trim().slice(0, MAX_LABEL),
+      valuation: typeof p?.valuation === "number" && Number.isFinite(p.valuation) ? p.valuation : 0,
+      note: String(p?.note ?? "").trim().slice(0, MAX_NOTE),
+    }))
+    .filter((p) => p.label !== "")
+    .slice(0, MAX_PARTS);
+  return {
+    slug: raw.slug,
+    companyName,
+    currency: (raw.currency || "USD").trim().toUpperCase().slice(0, 8),
+    sharesOutstanding: typeof raw.sharesOutstanding === "number" && raw.sharesOutstanding > 0
+      ? raw.sharesOutstanding
+      : null,
+    parts,
+    importedFrom: raw.importedFrom && typeof raw.importedFrom.ticker === "string"
+      ? { ticker: raw.importedFrom.ticker.slice(0, 20), period: String(raw.importedFrom.period ?? "").slice(0, 40) }
+      : null,
+    updatedAt: now,
+  };
+};

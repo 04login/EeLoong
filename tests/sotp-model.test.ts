@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseNumberInput, parseModelForm } from "../src/lib/stock-research/sotp/model.ts";
+import { parseNumberInput, parseModelForm, MAX_PARTS } from "../src/lib/stock-research/sotp/model.ts";
 
 test("parseNumberInput tolerates commas, $, spaces; rejects junk", () => {
   assert.equal(parseNumberInput("1,234.56"), 1234.56);
@@ -61,4 +61,50 @@ test("parseModelForm carries segment-import provenance through hidden fields", (
   assert.deepEqual(m.importedFrom, { ticker: "AAPL", period: "2025-06-27" });
   const m2 = parseModelForm(new FormData());
   assert.equal(m2.importedFrom, null);
+});
+
+import { sanitizeModel } from "../src/lib/stock-research/sotp/model.ts";
+
+const base = {
+  slug: "spacex",
+  companyName: "SpaceX",
+  currency: "usd",
+  sharesOutstanding: 2.1e9,
+  parts: [{ label: "Starlink", valuation: 6e11, note: "x" }],
+  importedFrom: null,
+};
+
+test("sanitizeModel round-trips a valid model and stamps updatedAt", () => {
+  const m = sanitizeModel(base, "2026-09-10T00:00:00Z");
+  assert.equal(m?.slug, "spacex");
+  assert.equal(m?.companyName, "SpaceX");
+  assert.equal(m?.currency, "USD");
+  assert.equal(m?.updatedAt, "2026-09-10T00:00:00Z");
+});
+
+test("sanitizeModel rejects empty names and malformed slugs", () => {
+  assert.equal(sanitizeModel({ ...base, companyName: "   " }, "now"), null);
+  assert.equal(sanitizeModel({ ...base, slug: "Bad Slug" }, "now"), null);
+  assert.equal(sanitizeModel({ ...base, slug: "" }, "now"), null);
+});
+
+test("sanitizeModel clamps hostile payloads", () => {
+  const hostile = {
+    ...base,
+    parts: [
+      { label: "x".repeat(500), valuation: Number.MAX_SAFE_INTEGER, note: "n".repeat(2000) },
+      { label: "", valuation: 1, note: "dropped, no label" },
+      { label: "ok", valuation: NaN, note: "NaN becomes 0" },
+      ...Array.from({ length: 80 }, (_, i) => ({ label: `p${i}`, valuation: i, note: "" })),
+    ],
+    sharesOutstanding: -1,
+    importedFrom: { ticker: "x".repeat(500), period: 42 as unknown as string },
+  };
+  const m = sanitizeModel(hostile, "now");
+  assert.equal(m?.parts.length, MAX_PARTS); // capped, label-less dropped
+  assert.equal(m?.parts[0].label.length, 120);
+  assert.equal(m?.parts[0].note.length, 500);
+  assert.equal(m?.parts.find((p) => p.label === "ok")?.valuation, 0);
+  assert.equal(m?.sharesOutstanding, null);
+  assert.equal(m?.importedFrom?.ticker.length, 20);
 });
