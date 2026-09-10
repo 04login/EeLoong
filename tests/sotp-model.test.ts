@@ -108,3 +108,50 @@ test("sanitizeModel clamps hostile payloads", () => {
   assert.equal(m?.sharesOutstanding, null);
   assert.equal(m?.importedFrom?.ticker.length, 20);
 });
+
+import { computeTotals, seedPartsFromSegments } from "../src/lib/stock-research/sotp/model.ts";
+
+test("computeTotals sums parts (negatives allowed for debt) and divides by shares", () => {
+  const t = computeTotals({ parts: [{ label: "a", valuation: 1e12, note: "" }, { label: "debt", valuation: -2e11, note: "" }], sharesOutstanding: 1e9 });
+  assert.equal(t.total, 8e11);
+  assert.equal(t.perShare, 800);
+});
+
+test("computeTotals returns null per-share without positive shares", () => {
+  assert.equal(computeTotals({ parts: [], sharesOutstanding: null }).perShare, null);
+  assert.equal(computeTotals({ parts: [], sharesOutstanding: 0 }).total, 0);
+});
+
+test("seedPartsFromSegments prefers the reportable-segment axis and zero-valuations parts", () => {
+  const segments = {
+    ticker: "AAPL",
+    groups: [
+      { axisLabel: "By product / service", rows: [{ label: "iPhone", revenue: 39100000000 }] },
+      { axisLabel: "By reportable segment", rows: [
+        { label: "Hardware", revenue: 250000000000 },
+        { label: "Services", revenue: 96000000000 },
+        { label: "Zero row", revenue: 0 },
+      ] },
+    ],
+    period: "2025-06-27",
+    source: "llm",
+    sourceSummary: null,
+    fyEnd: "2025-06-27",
+  } as parameters<typeof seedPartsFromSegments>[0];
+  const parts = seedPartsFromSegments(segments);
+  assert.equal(parts.length, 2);
+  assert.equal(parts[0].label, "Hardware");
+  assert.equal(parts[0].valuation, 0); // valuations are ALWAYS the user's own
+  assert.match(parts[0].note, /Segment revenue: 250\.00B/);
+  assert.match(parts[0].note, /2025-06-27/);
+});
+
+test("seedPartsFromSegments falls back to the first group and returns [] when empty", () => {
+  const segments = {
+    ticker: "X", groups: [{ axisLabel: "As disclosed", rows: [{ label: "Only slice", revenue: 5e9 }] }],
+    period: "2025-01-01", source: "html", sourceSummary: null, fyEnd: "2025-01-01",
+  } as parameters<typeof seedPartsFromSegments>[0];
+  assert.equal(seedPartsFromSegments(segments)[0].label, "Only slice");
+  const empty = { ticker: "X", groups: [], period: "p", source: "none", sourceSummary: null, fyEnd: "p" } as parameters<typeof seedPartsFromSegments>[0];
+  assert.deepEqual(seedPartsFromSegments(empty), []);
+});

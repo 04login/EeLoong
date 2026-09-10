@@ -103,3 +103,34 @@ export const sanitizeModel = (raw: Omit<SotpModel, "updatedAt">, now: string): S
     updatedAt: now,
   };
 };
+
+export type SotpTotals = {
+  total: number; // sum of part valuations
+  perShare: number | null; // total / sharesOutstanding; null while shares unknown
+};
+
+export const computeTotals = (model: Pick<SotpModel, "parts" | "sharesOutstanding">): SotpTotals => {
+  const total = model.parts.reduce((sum, p) => sum + (Number.isFinite(p.valuation) ? p.valuation : 0), 0);
+  const shares = model.sharesOutstanding;
+  return { total, perShare: shares !== null && shares > 0 ? total / shares : null };
+};
+
+// Turn an SEC segment breakdown into editable parts. Valuations start at 0 —
+// the LLM/XBRL pipeline supplies the STRUCTURE (part names + reported segment
+// revenue as a note); it never supplies a valuation. Prefers the reportable-
+// segment axis (the natural "parts of the company"), then product, then first.
+export const seedPartsFromSegments = (segments: SegmentResult): SotpPart[] => {
+  const preferred =
+    segments.groups.find((g) => /reportable segment/i.test(g.axisLabel)) ??
+    segments.groups.find((g) => /product/i.test(g.axisLabel)) ??
+    segments.groups[0];
+  if (!preferred) return [];
+  return preferred.rows
+    .filter((r) => Number.isFinite(r.revenue) && r.revenue !== 0)
+    .slice(0, MAX_PARTS)
+    .map((r) => ({
+      label: r.label.slice(0, MAX_LABEL),
+      valuation: 0,
+      note: `Segment revenue: ${formatNumber(r.revenue)} (period ${segments.period})`,
+    }));
+};
