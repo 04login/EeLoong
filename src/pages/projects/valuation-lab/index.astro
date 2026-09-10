@@ -82,6 +82,7 @@ const deleted = url.searchParams.get("deleted") === "1";
 			<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
 				{models.map((m) => {
 					const totals = computeTotals(m);
+					const equityPerShare = totals.equity?.perShare ?? null;
 					return (
 						<a href={`/projects/valuation-lab/${m.slug}`}
 							class="block bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] hover:border-[color:var(--accent)] rounded-xl p-5 transition">
@@ -89,13 +90,27 @@ const deleted = url.searchParams.get("deleted") === "1";
 								<h3 class="font-bold text-[color:var(--paper)]">{m.companyName}</h3>
 								<span class="text-xs font-mono text-[color:var(--paper-dim)]">{m.slug}</span>
 							</div>
-							<p class="text-2xl font-bold text-[color:var(--accent)] mt-3">
-								{cur(m.currency)}{formatNumber(totals.total)}
-							</p>
-							<p class="text-xs text-[color:var(--paper-dim)] mt-1">
-								{m.parts.length} part{m.parts.length === 1 ? "" : "s"} ·
-								{totals.perShare !== null ? ` ${cur(m.currency)}${formatPrice(totals.perShare)} / share` : " shares not set"}
-							</p>
+							{equityPerShare !== null ? (
+								<>
+									<p class="text-2xl font-bold text-[color:var(--accent)] mt-3">
+										{cur(m.currency)}{formatPrice(equityPerShare)} <span class="text-sm font-normal text-[color:var(--paper-dim)]">/ share</span>
+									</p>
+									<p class="text-xs text-[color:var(--paper-dim)] mt-1">
+										equity bridge · {m.parts.length} part{m.parts.length === 1 ? "" : "s"} · {cur(m.currency)}{formatNumber(totals.total)} parts
+										{totals.perShare !== null ? ` (${cur(m.currency)}${formatPrice(totals.perShare)} / share)` : ""}
+									</p>
+								</>
+							) : (
+								<>
+									<p class="text-2xl font-bold text-[color:var(--accent)] mt-3">
+										{cur(m.currency)}{formatNumber(totals.total)}
+									</p>
+									<p class="text-xs text-[color:var(--paper-dim)] mt-1">
+										{m.parts.length} part{m.parts.length === 1 ? "" : "s"} ·
+										{totals.perShare !== null ? ` ${cur(m.currency)}${formatPrice(totals.perShare)} / share` : " shares not set"}
+									</p>
+								</>
+							)}
 							<p class="text-xs text-[color:var(--paper-muted)] mt-2">Updated {m.updatedAt.slice(0, 10)}</p>
 						</a>
 					);

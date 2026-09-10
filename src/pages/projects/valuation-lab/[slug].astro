@@ -16,6 +16,7 @@ const writeToken = env.SOTP_WRITE_TOKEN ?? "";
 const url = new URL(Astro.request.url);
 const saved = url.searchParams.get("saved") === "1";
 const importFailed = url.searchParams.get("import") === "failed";
+const prefilled = url.searchParams.get("prefilled");
 ---
 
 <html lang="en">
@@ -60,13 +61,23 @@ const importFailed = url.searchParams.get("import") === "failed";
 						Couldn't seed parts from that ticker (no SEC segments, or the LLM step failed) — add parts manually below.
 					</div>
 				)}
+				{prefilled === "1" && (
+					<div class="mb-6 p-4 bg-[color:var(--ink-850)] border border-green-400/40 rounded-lg text-green-400 text-sm">
+						Prefilled empty bridge fields from the latest 10-Q — values are raw filing units (USD), sanity-check them.
+					</div>
+				)}
+				{prefilled === "0" && (
+					<div class="mb-6 p-4 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-lg text-[color:var(--paper-dim)] text-sm">
+						Nothing new to prefill — no usable balance-sheet data from the latest filing, or those fields were already set.
+					</div>
+				)}
 				{model.importedFrom && (
 					<p class="mb-6 text-xs text-[color:var(--paper-muted)] italic">
 						Parts seeded from {model.importedFrom.ticker} segment revenue (period {model.importedFrom.period}) — valuations are yours to fill in.
 					</p>
 				)}
 
-				<form id="sotp-form" method="POST" action="/projects/valuation-lab/actions" data-currency={cur(model.currency)}
+				<form id="sotp-form" method="POST" action="/projects/valuation-lab/actions" data-currency={cur(model.currency)} data-has-bridge={totals?.equity ? "1" : "0"}
 					class="bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
 					<input type="hidden" name="action" value="save" />
 					<input type="hidden" name="slug" value={model.slug} />
@@ -101,22 +112,48 @@ const importFailed = url.searchParams.get("import") === "failed";
 						<table class="w-full text-sm">
 							<thead>
 								<tr class="text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider border-b border-[color:var(--ink-600)]">
-									<th class="py-2 pr-4 w-1/4">Part</th>
-									<th class="py-2 pr-4 w-1/4">Valuation</th>
+									<th class="py-2 pr-4 w-1/5">Part</th>
+									<th class="py-2 pr-4">Mode</th>
+									<th class="py-2 pr-4 w-1/5">Valuation</th>
+									<th class="py-2 pr-4">× Revenue</th>
 									<th class="py-2 pr-4">Reasoning / note</th>
 									<th class="py-2 w-10"></th>
 								</tr>
 							</thead>
 							<tbody id="part-rows" class="divide-y divide-[color:var(--ink-700)]">
-								{model.parts.map((p) => (
+								{model.parts.map((p) => {
+									const isMult = p.mode === "multiple";
+									const preview = isMult && p.revenueRef != null && (p.multiple ?? 0) > 0
+										? `= ${cur(model.currency)}${formatNumber(p.revenueRef * (p.multiple ?? 0))}`
+										: "";
+									return (
 									<tr>
 										<td class="py-2 pr-4">
 											<input type="text" name="partLabel" value={p.label} maxlength="120" placeholder="e.g. Starlink"
 												class="w-full bg-transparent border border-transparent hover:border-[color:var(--ink-700)] focus:bg-[color:var(--ink-900)] focus:border-[color:var(--accent)] rounded-md px-2 py-1.5 text-[color:var(--paper)] focus:outline-none" />
 										</td>
 										<td class="py-2 pr-4">
+											<select name="partMode"
+												class="w-full bg-transparent border border-transparent hover:border-[color:var(--ink-700)] focus:bg-[color:var(--ink-900)] focus:border-[color:var(--accent)] rounded-md px-2 py-1.5 text-[color:var(--paper-dim)] focus:outline-none cursor-pointer">
+												<option value="manual" selected={!isMult}>Manual value</option>
+												<option value="multiple" selected={isMult}>× revenue</option>
+											</select>
+										</td>
+										<td class="py-2 pr-4">
 											<input type="text" inputmode="decimal" name="partValuation" value={p.valuation} placeholder="0"
 												class="w-full bg-transparent border border-transparent hover:border-[color:var(--ink-700)] focus:bg-[color:var(--ink-900)] focus:border-[color:var(--accent)] rounded-md px-2 py-1.5 font-mono text-[color:var(--accent)] focus:outline-none" />
+										</td>
+										<td class="py-2 pr-4">
+											<div data-multiple-cell class={isMult ? "space-y-0.5" : "hidden"}>
+												<div class="flex items-center gap-1">
+													<input type="text" inputmode="decimal" name="partRevenueRef" value={p.revenueRef ?? ""} placeholder="revenue"
+														class="w-28 bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-2 py-1 font-mono text-xs text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)]" />
+													<span class="text-xs text-[color:var(--paper-dim)]">×</span>
+													<input type="text" inputmode="decimal" name="partMultiple" value={p.multiple ?? ""} placeholder="8"
+														class="w-16 bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-2 py-1 font-mono text-xs text-[color:var(--accent)] focus:outline-none focus:border-[color:var(--accent)]" />
+												</div>
+												<p data-multiple-preview class="text-xs font-mono text-[color:var(--paper-muted)]">{preview}</p>
+											</div>
 										</td>
 										<td class="py-2 pr-4">
 											<input type="text" name="partNote" value={p.note} maxlength="500" placeholder="e.g. 8× 2026E revenue of $12B"
@@ -129,7 +166,8 @@ const importFailed = url.searchParams.get("import") === "failed";
 											</button>
 										</td>
 									</tr>
-								))}
+									);
+								})}
 							</tbody>
 						</table>
 					</div>
@@ -141,8 +179,27 @@ const importFailed = url.searchParams.get("import") === "failed";
 									class="w-full bg-transparent border border-transparent hover:border-[color:var(--ink-700)] focus:bg-[color:var(--ink-900)] focus:border-[color:var(--accent)] rounded-md px-2 py-1.5 text-[color:var(--paper)] focus:outline-none" />
 							</td>
 							<td class="py-2 pr-4">
+								<select name="partMode"
+									class="w-full bg-transparent border border-transparent hover:border-[color:var(--ink-700)] focus:bg-[color:var(--ink-900)] focus:border-[color:var(--accent)] rounded-md px-2 py-1.5 text-[color:var(--paper-dim)] focus:outline-none cursor-pointer">
+									<option value="manual" selected>Manual value</option>
+									<option value="multiple">× revenue</option>
+								</select>
+							</td>
+							<td class="py-2 pr-4">
 								<input type="text" inputmode="decimal" name="partValuation" placeholder="0"
 									class="w-full bg-transparent border border-transparent hover:border-[color:var(--ink-700)] focus:bg-[color:var(--ink-900)] focus:border-[color:var(--accent)] rounded-md px-2 py-1.5 font-mono text-[color:var(--accent)] focus:outline-none" />
+							</td>
+							<td class="py-2 pr-4">
+								<div data-multiple-cell class="hidden">
+									<div class="flex items-center gap-1">
+										<input type="text" inputmode="decimal" name="partRevenueRef" placeholder="revenue"
+											class="w-28 bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-2 py-1 font-mono text-xs text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)]" />
+										<span class="text-xs text-[color:var(--paper-dim)]">×</span>
+										<input type="text" inputmode="decimal" name="partMultiple" placeholder="8"
+											class="w-16 bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-2 py-1 font-mono text-xs text-[color:var(--accent)] focus:outline-none focus:border-[color:var(--accent)]" />
+									</div>
+									<p data-multiple-preview class="text-xs font-mono text-[color:var(--paper-muted)]"></p>
+								</div>
 							</td>
 							<td class="py-2 pr-4">
 								<input type="text" name="partNote" maxlength="500" placeholder="reasoning"
@@ -181,12 +238,94 @@ const importFailed = url.searchParams.get("import") === "failed";
 						</div>
 					</div>
 
+					<!-- Equity bridge (optional). Inputs are plain text; blank = no bridge. -->
+					<div class="mt-6 border-t border-[color:var(--ink-700)] pt-6">
+						<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+							<div>
+								<h2 class="text-lg font-bold text-[color:var(--paper)]">Equity bridge</h2>
+								<p class="text-xs text-[color:var(--paper-muted)] mt-0.5">From parts value to equity value per share — all optional; leave blank to skip.</p>
+							</div>
+							{model.importedFrom && (
+								<button type="submit" form="prefill-bridge-form"
+									class="inline-flex items-center gap-2 px-4 py-2 border border-[color:var(--ink-600)] bg-[color:var(--ink-800)] hover:border-[color:var(--accent)] rounded-lg text-sm font-semibold transition cursor-pointer">
+									<iconify-icon icon="mdi:database-import-outline" class="text-lg text-[color:var(--accent)]"></iconify-icon>
+									Prefill bridge from filing
+								</button>
+							)}
+						</div>
+
+						<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+							<label class="block">
+								<span class="block text-xs font-semibold uppercase tracking-wider text-[color:var(--paper-dim)] mb-1">Net debt</span>
+								<input type="text" inputmode="decimal" name="netDebt" value={model.bridge?.netDebt ?? ""} placeholder="e.g. -60,600,000,000"
+									class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 font-mono text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)]" />
+								<span class="block text-xs text-[color:var(--paper-muted)] mt-1">Positive = debt to subtract; negative = net cash adds back.</span>
+							</label>
+							<label class="block">
+								<span class="block text-xs font-semibold uppercase tracking-wider text-[color:var(--paper-dim)] mb-1">Minority interests</span>
+								<input type="text" inputmode="decimal" name="minorityInterests" value={model.bridge?.minorityInterests ?? ""} placeholder="0"
+									class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 font-mono text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)]" />
+								<span class="block text-xs text-[color:var(--paper-muted)] mt-1">Non-controlling stakes, subtracted from equity value.</span>
+							</label>
+							<label class="block">
+								<span class="block text-xs font-semibold uppercase tracking-wider text-[color:var(--paper-dim)] mb-1">Preferred stock</span>
+								<input type="text" inputmode="decimal" name="preferred" value={model.bridge?.preferred ?? ""} placeholder="0"
+									class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 font-mono text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)]" />
+								<span class="block text-xs text-[color:var(--paper-muted)] mt-1">Redeemable / preferred claims, subtracted.</span>
+							</label>
+							<label class="block">
+								<span class="block text-xs font-semibold uppercase tracking-wider text-[color:var(--paper-dim)] mb-1">SOTP discount %</span>
+								<input type="text" inputmode="decimal" name="sotpDiscountPct" value={model.bridge?.sotpDiscountPct ?? ""} placeholder="e.g. 10"
+									class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 font-mono text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)]" />
+								<span class="block text-xs text-[color:var(--paper-muted)] mt-1">0–30, e.g. 10 for a typical conglomerate discount.</span>
+							</label>
+							<label class="block">
+								<span class="block text-xs font-semibold uppercase tracking-wider text-[color:var(--paper-dim)] mb-1">Illiquidity %</span>
+								<input type="text" inputmode="decimal" name="illiquidityPct" value={model.bridge?.illiquidityPct ?? ""} placeholder="e.g. 15"
+									class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 font-mono text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)]" />
+								<span class="block text-xs text-[color:var(--paper-muted)] mt-1">0–60; meaningful for private companies.</span>
+							</label>
+						</div>
+
+						<div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-[color:var(--ink-900)]/60 border border-[color:var(--ink-700)] rounded-lg p-4">
+							<div class="space-y-2 text-sm">
+								<div class="flex items-center justify-between gap-4">
+									<span class="text-[color:var(--paper-dim)]">After net debt</span>
+									<span id="sotp-bridge-after-net-debt" class="font-mono text-[color:var(--paper)]">{totals?.equity ? `${cur(model.currency)}${formatNumber(totals.equity.afterNetDebt)}` : "—"}</span>
+								</div>
+								<div class="flex items-center justify-between gap-4">
+									<span class="text-[color:var(--paper-dim)]">After minorities &amp; preferred</span>
+									<span id="sotp-bridge-after-interests" class="font-mono text-[color:var(--paper)]">{totals?.equity ? `${cur(model.currency)}${formatNumber(totals.equity.afterInterests)}` : "—"}</span>
+								</div>
+								<div class="flex items-center justify-between gap-4">
+									<span class="text-[color:var(--paper-dim)]">After SOTP &amp; illiquidity discounts</span>
+									<span id="sotp-bridge-after-discount" class="font-mono text-[color:var(--paper)]">{totals?.equity ? `${cur(model.currency)}${formatNumber(totals.equity.afterDiscount)}` : "—"}</span>
+								</div>
+							</div>
+							<div>
+								<p class="text-xs font-semibold uppercase tracking-wider text-[color:var(--paper-dim)] mb-1">Equity value</p>
+								<p id="sotp-bridge-equity" class="text-3xl font-bold text-[color:var(--paper)]">{totals?.equity ? `${cur(model.currency)}${formatNumber(totals.equity.equityValue)}` : "—"}</p>
+								<p class="text-xs font-semibold uppercase tracking-wider text-[color:var(--paper-dim)] mt-3 mb-1">Per share (bridge)</p>
+								<p id="sotp-bridge-per-share" class="text-2xl font-bold text-[color:var(--accent)]">{totals?.equity?.perShare != null ? `${cur(model.currency)}${formatPrice(totals.equity.perShare)}` : "—"}</p>
+							</div>
+						</div>
+					</div>
+
 					<button type="submit"
 						class="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-[color:var(--accent)] hover:opacity-90 rounded-lg font-semibold text-sm transition">
 						<iconify-icon icon="mdi:content-save"></iconify-icon>
 						Save model
 					</button>
 				</form>
+
+				{model.importedFrom && (
+					<form id="prefill-bridge-form" method="POST" action="/projects/valuation-lab/actions" class="hidden">
+						<input type="hidden" name="action" value="prefill-bridge" />
+						<input type="hidden" name="slug" value={model.slug} />
+						<input type="hidden" name="bridgeTicker" value={model.importedFrom.ticker} />
+						{writeToken && <input type="hidden" name="writeToken" value={writeToken} />}
+					</form>
+				)}
 
 				<form method="POST" action="/projects/valuation-lab/actions" class="mt-4"
 					onsubmit="return confirm('Delete this model? This cannot be undone.')">
@@ -202,36 +341,99 @@ const importFailed = url.searchParams.get("import") === "failed";
 	</main>
 
 	<script>
-		// Live totals: sum part valuations and divide by shares as the user types.
-		// The form still posts everything to the server, which recomputes — this
-		// is progressive enhancement, not the source of truth.
+		// Live editor — the server recomputes everything on save; this is
+		// progressive enhancement only. It updates part totals (including
+		// × revenue rows), toggles the multiple inputs, and renders the
+		// equity-bridge waterfall.
 		const form = document.getElementById("sotp-form") as HTMLFormElement | null;
 		const currency = form?.dataset.currency ?? "";
 		const fmt = (n: number): string =>
 			n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-		const readNum = (input: HTMLInputElement): number => {
-			const n = Number(input.value.replace(/[\s,$]/g, ""));
+		const fmtCompact = (n: number): string => {
+			const abs = Math.abs(n);
+			if (abs >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
+			if (abs >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+			if (abs >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
+			if (abs >= 1e3) return `${(n / 1e3).toFixed(2)}K`;
+			return n.toFixed(2);
+		};
+		const numOf = (el: HTMLInputElement | HTMLSelectElement | null): number => {
+			if (!el) return 0;
+			const n = Number(el.value.replace(/[\s,$]/g, ""));
 			return Number.isFinite(n) ? n : 0;
 		};
+		const setText = (id: string, text: string): void => {
+			const el = document.getElementById(id);
+			if (el) el.textContent = text;
+		};
+		const clampPct = (v: number, lo: number, hi: number): number => (v >= lo && v <= hi ? v : 0);
+
 		const recompute = (): void => {
 			if (!form) return;
-			const total = [...form.querySelectorAll<HTMLInputElement>('input[name="partValuation"]')]
-				.reduce((sum, el) => sum + readNum(el), 0);
+
+			// A × revenue row's effective value is revenueRef × multiple, mirroring
+			// the server's recomputeMultiples; manual rows use their own input.
+			let total = 0;
+			form.querySelectorAll<HTMLTableRowElement>("#part-rows tr").forEach((row) => {
+				const modeEl = row.querySelector<HTMLSelectElement>('select[name="partMode"]');
+				const cell = row.querySelector<HTMLElement>("[data-multiple-cell]");
+				const preview = row.querySelector<HTMLElement>("[data-multiple-preview]");
+				const valInput = row.querySelector<HTMLInputElement>('input[name="partValuation"]');
+				const isMultiple = modeEl?.value === "multiple";
+				cell?.classList.toggle("hidden", !isMultiple);
+				if (isMultiple) {
+					const ref = numOf(row.querySelector<HTMLInputElement>('input[name="partRevenueRef"]'));
+					const multiple = numOf(row.querySelector<HTMLInputElement>('input[name="partMultiple"]'));
+					if (ref !== 0 && multiple > 0) {
+						const value = ref * multiple;
+						if (valInput) valInput.value = String(value);
+						if (preview) preview.textContent = `= ${currency}${fmtCompact(value)}`;
+					} else if (preview) {
+						preview.textContent = "";
+					}
+				} else if (preview) {
+					preview.textContent = "";
+				}
+				total += numOf(valInput);
+			});
+
+			setText("sotp-total", `${currency}${fmt(total)}`);
+
 			const sharesInput = form.querySelector<HTMLInputElement>('input[name="sharesOutstanding"]');
 			const shares = sharesInput ? Number(sharesInput.value.replace(/[\s,$]/g, "")) : NaN;
-			const totalEl = document.getElementById("sotp-total");
-			const perShareEl = document.getElementById("sotp-per-share");
-			if (totalEl) totalEl.textContent = `${currency}${fmt(total)}`;
-			if (perShareEl) {
-				perShareEl.textContent = Number.isFinite(shares) && shares > 0
-					? `${currency}${fmt(total / shares)}`
-					: "—";
+			const sharesValid = Number.isFinite(shares) && shares > 0;
+			setText("sotp-per-share", sharesValid ? `${currency}${fmt(total / shares)}` : "—");
+
+			// Equity bridge waterfall. A model with no bridge shows "—" until the
+			// user enters a bridge field (legacy models stay visually unchanged).
+			const bridgeField = (name: string): HTMLInputElement | null =>
+				form.querySelector<HTMLInputElement>(`input[name="${name}"]`);
+			const bridgeNames = ["netDebt", "minorityInterests", "preferred", "sotpDiscountPct", "illiquidityPct"];
+			const hasBridgeInput = bridgeNames.some((n) => (bridgeField(n)?.value ?? "").trim() !== "");
+			if (form.dataset.hasBridge !== "1" && !hasBridgeInput) {
+				["sotp-bridge-after-net-debt", "sotp-bridge-after-interests", "sotp-bridge-after-discount"].forEach((id) => setText(id, "—"));
+				setText("sotp-bridge-equity", "—");
+				setText("sotp-bridge-per-share", "—");
+				return;
 			}
+			const afterNetDebt = total - numOf(bridgeField("netDebt"));
+			const afterInterests = afterNetDebt - numOf(bridgeField("minorityInterests")) - numOf(bridgeField("preferred"));
+			const afterDiscount =
+				afterInterests *
+				(1 - clampPct(numOf(bridgeField("sotpDiscountPct")), 0, 30) / 100) *
+				(1 - clampPct(numOf(bridgeField("illiquidityPct")), 0, 60) / 100);
+			setText("sotp-bridge-after-net-debt", `${currency}${fmtCompact(afterNetDebt)}`);
+			setText("sotp-bridge-after-interests", `${currency}${fmtCompact(afterInterests)}`);
+			setText("sotp-bridge-after-discount", `${currency}${fmtCompact(afterDiscount)}`);
+			setText("sotp-bridge-equity", `${currency}${fmtCompact(afterDiscount)}`);
+			setText("sotp-bridge-per-share", sharesValid ? `${currency}${fmt(afterDiscount / shares)}` : "—");
 		};
 		form?.addEventListener("input", recompute);
+		form?.addEventListener("change", recompute);
 
 		// Add part — clone the <template> row (kept in sync with rendered rows
-		// by hand; both must always submit label+valuation+note for every row).
+		// by hand; every row must always submit every field so the server's
+		// index-zip parsing stays aligned).
 		const rows = document.getElementById("part-rows");
 		const tpl = document.getElementById("part-row") as HTMLTemplateElement | null;
 		document.getElementById("add-part")?.addEventListener("click", () => {
