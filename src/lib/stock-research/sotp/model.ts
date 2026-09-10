@@ -31,6 +31,7 @@ export type SotpModel = {
   currency: string; // display currency, e.g. "USD" (drives the $/S$ symbol)
   sharesOutstanding: number | null; // null until provided
   parts: SotpPart[];
+  bridge?: SotpBridge | null; // equity bridge; absent/null on v1 models
   importedFrom: { ticker: string; period: string } | null; // provenance when seeded from SEC segments
   updatedAt: string; // ISO date — always set server-side, never trusted from the client
 };
@@ -89,12 +90,34 @@ export const parseModelForm = (fd: FormData): Omit<SotpModel, "updatedAt"> => {
   const importTicker = one("importTicker");
   const importPeriod = one("importPeriod");
   const shares = parseNumberInput(one("sharesOutstanding"));
+
+  // Bridge section is optional: a v1 form (or the create form) posts no bridge
+  // fields at all → `bridge: null`, so legacy pages see exactly the v1 shape.
+  const bridgeRaw = {
+    netDebt: one("netDebt"),
+    minorityInterests: one("minorityInterests"),
+    preferred: one("preferred"),
+    sotpDiscountPct: one("sotpDiscountPct"),
+    illiquidityPct: one("illiquidityPct"),
+  };
+  const hasBridge = Object.values(bridgeRaw).some((s) => s !== "");
+  const bridge: SotpBridge | null = hasBridge
+    ? {
+        netDebt: parseNumberInput(bridgeRaw.netDebt) ?? 0,
+        minorityInterests: parseNumberInput(bridgeRaw.minorityInterests) ?? 0,
+        preferred: parseNumberInput(bridgeRaw.preferred) ?? 0,
+        sotpDiscountPct: parseNumberInput(bridgeRaw.sotpDiscountPct) ?? 0,
+        illiquidityPct: parseNumberInput(bridgeRaw.illiquidityPct) ?? 0,
+      }
+    : null;
+
   return {
     slug: one("slug"),
     companyName: one("companyName"),
     currency: (one("currency") || "USD").toUpperCase().slice(0, 8),
     sharesOutstanding: shares !== null && shares > 0 ? shares : null,
     parts,
+    bridge,
     importedFrom: importTicker && importPeriod
       ? { ticker: importTicker.slice(0, 20), period: importPeriod.slice(0, 40) }
       : null,
@@ -125,6 +148,18 @@ export const sanitizeModel = (raw: Omit<SotpModel, "updatedAt">, now: string): S
   // Multiple parts get their valuation RE-DERIVED here — the client preview is
   // cosmetic; this is what actually persists.
   const parts = recomputeMultiples(cleanParts);
+  // Bridge is optional: keep it null unless the incoming record actually has a
+  // bridge object (v1 models have no such key). Percentages clamped server-side.
+  const rawBridge = raw.bridge;
+  const bridge: SotpBridge | null = rawBridge
+    ? {
+        netDebt: typeof rawBridge.netDebt === "number" && Number.isFinite(rawBridge.netDebt) ? rawBridge.netDebt : 0,
+        minorityInterests: typeof rawBridge.minorityInterests === "number" && Number.isFinite(rawBridge.minorityInterests) ? rawBridge.minorityInterests : 0,
+        preferred: typeof rawBridge.preferred === "number" && Number.isFinite(rawBridge.preferred) ? rawBridge.preferred : 0,
+        sotpDiscountPct: clampPct(rawBridge.sotpDiscountPct, 0, 30),
+        illiquidityPct: clampPct(rawBridge.illiquidityPct, 0, 60),
+      }
+    : null;
   return {
     slug: raw.slug,
     companyName,
@@ -133,6 +168,7 @@ export const sanitizeModel = (raw: Omit<SotpModel, "updatedAt">, now: string): S
       ? raw.sharesOutstanding
       : null,
     parts,
+    bridge,
     importedFrom: raw.importedFrom && typeof raw.importedFrom.ticker === "string"
       ? { ticker: raw.importedFrom.ticker.slice(0, 20), period: String(raw.importedFrom.period ?? "").slice(0, 40) }
       : null,
@@ -143,12 +179,17 @@ export const sanitizeModel = (raw: Omit<SotpModel, "updatedAt">, now: string): S
 export type SotpTotals = {
   total: number; // sum of part valuations
   perShare: number | null; // total / sharesOutstanding; null while shares unknown
+  equity: ReturnType<typeof computeBridge> | null; // bridge waterfall; null on v1 models
 };
 
-export const computeTotals = (model: Pick<SotpModel, "parts" | "sharesOutstanding">): SotpTotals => {
+export const computeTotals = (model: Pick<SotpModel, "parts" | "sharesOutstanding" | "bridge">): SotpTotals => {
   const total = model.parts.reduce((sum, p) => sum + (Number.isFinite(p.valuation) ? p.valuation : 0), 0);
   const shares = model.sharesOutstanding;
-  return { total, perShare: shares !== null && shares > 0 ? total / shares : null };
+  return {
+    total,
+    perShare: shares !== null && shares > 0 ? total / shares : null,
+    equity: model.bridge ? computeBridge(total, model.bridge, shares) : null,
+  };
 };
 
 export type SotpBridge = {
