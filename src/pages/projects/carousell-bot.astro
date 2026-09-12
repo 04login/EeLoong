@@ -75,7 +75,8 @@ if (db) {
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : "";
 
-    // Determine the ORDER BY clause
+    // Determine the ORDER BY clause (keys must match the sort <select> values
+    // and the th[data-sort] column prefixes + _asc/_desc toggles below)
     let orderBySql = "ORDER BY a.deal_score DESC";
     if (sortOption === "date_desc") orderBySql = "ORDER BY l.listed_at DESC";
     else if (sortOption === "date_asc") orderBySql = "ORDER BY l.listed_at ASC";
@@ -107,6 +108,7 @@ if (db) {
 		JOIN listing_analysis a ON l.listing_id = a.listing_id
 		${whereSql}
 		${orderBySql}
+		LIMIT 200
 	`;
 
     // 3. Execute the custom statement
@@ -157,16 +159,15 @@ const formatDate = (dateStr: string) => {
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<meta name="viewport" content="width=device-width" />
+		<meta name="description" content="AI-driven Carousell deal monitor — intrinsic value tracking for Singapore PC listings." />
 		<title>Carousell Deals Dashboard</title>
 		<script is:inline type="module" src="https://cdn.jsdelivr.net/npm/iconify-icon@1/dist/iconify-icon.min.js"></script>
         <style>
-            /* Smooth accordion/details opening */
-            details > summary { list-style: none; }
-            details > summary::-webkit-details-marker { display: none; }
-            details[open] summary ~ * { animation: sweep .3s ease-in-out; }
-            @keyframes sweep {
-                0% { opacity: 0; margin-top: -10px; }
-                100% { opacity: 1; margin-top: 0px; }
+            /* Expand-row opening animation */
+            .animate-expand { animation: expand-in .25s ease-out; }
+            @keyframes expand-in {
+                0% { opacity: 0; transform: translateY(-6px); }
+                100% { opacity: 1; transform: translateY(0); }
             }
         </style>
 	</head>
@@ -181,10 +182,16 @@ const formatDate = (dateStr: string) => {
                     </h1>
 					<p class="text-[color:var(--paper-dim)] ml-1">AI-driven intrinsic value tracking</p>
 				</div>
-				<a href="/projects/carousell-bot/searches" class="flex gap-2 items-center px-4 py-2 border border-[color:var(--ink-600)] bg-[color:var(--ink-850)] hover:bg-[color:var(--ink-800)] hover:border-[color:var(--accent)] rounded-lg text-sm transition font-semibold shadow-sm">
-					<iconify-icon icon="mdi:cog" class="text-lg text-[color:var(--accent)]"></iconify-icon>
-					Settings
-				</a>
+				<div class="flex items-center gap-2">
+					<a href="/" class="flex gap-2 items-center px-4 py-2 text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] rounded-lg text-sm transition font-semibold">
+						<iconify-icon icon="mdi:arrow-left" class="text-lg"></iconify-icon>
+						Portfolio
+					</a>
+					<a href="/projects/carousell-bot/searches" class="flex gap-2 items-center px-4 py-2 border border-[color:var(--ink-600)] bg-[color:var(--ink-850)] hover:bg-[color:var(--ink-800)] hover:border-[color:var(--accent)] rounded-lg text-sm transition font-semibold shadow-sm">
+						<iconify-icon icon="mdi:cog" class="text-lg text-[color:var(--accent)]"></iconify-icon>
+						Settings
+					</a>
+				</div>
 			</div>
 
             <!-- Filters Bar -->
@@ -224,8 +231,8 @@ const formatDate = (dateStr: string) => {
                     <div class="w-full md:w-auto min-w-[170px]">
                         <label for="sort" class="block text-[color:var(--paper-dim)] text-xs font-semibold uppercase tracking-wider mb-1.5 ml-0.5">Sort By</label>
                         <select id="sort" name="sort" class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 text-sm text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)] transition appearance-none cursor-pointer">
-                            <option value="score_desc" selected={sortOption === "score_desc"}>Highest Deal Score</option>
-                            <option value="score_asc" selected={sortOption === "score_asc"}>Lowest Deal Score</option>
+                            <option value="deal_score_desc" selected={sortOption === "deal_score_desc"}>Highest Deal Score</option>
+                            <option value="deal_score_asc" selected={sortOption === "deal_score_asc"}>Lowest Deal Score</option>
                             <option value="date_desc" selected={sortOption === "date_desc"}>Newest First</option>
                             <option value="date_asc" selected={sortOption === "date_asc"}>Oldest First</option>
                             <option value="analyzed_at_desc" selected={sortOption === "analyzed_at_desc"}>Most Recently Analyzed</option>
@@ -240,10 +247,10 @@ const formatDate = (dateStr: string) => {
                     </div>
 
                     <div class="w-full md:w-auto flex gap-2">
-                        <button type="submit" class="flex-grow md:flex-grow-0 bg-[color:var(--accent)] hover:bg-[color:var(--accent-light)] text-gray-900 font-bold py-2 px-6 rounded-md transition duration-200 shadow-sm flex items-center justify-center gap-2">
+                        <button type="submit" class="flex-grow md:flex-grow-0 bg-[color:var(--accent)] hover:bg-[color:var(--accent-light)] text-white font-bold py-2 px-6 rounded-md transition duration-200 shadow-sm flex items-center justify-center gap-2">
                             Apply
                         </button>
-                        {(filterSearchId !== "all" || textQuery !== "" || sortOption !== "score_desc") && (
+                        {(filterSearchId !== "all" || textQuery !== "" || sortOption !== "deal_score_desc" || timeOption !== "all") && (
                             <a href="/projects/carousell-bot" class="flex-grow md:flex-grow-0 bg-[color:var(--ink-700)] hover:bg-[color:var(--ink-600)] text-[color:var(--paper)] font-semibold py-2 px-4 rounded-md transition duration-200 flex items-center justify-center text-sm" title="Clear Filters">
                                 <iconify-icon icon="mdi:close"></iconify-icon>
                             </a>
@@ -266,9 +273,9 @@ const formatDate = (dateStr: string) => {
 								<tr>
 									<th class="w-10 px-3 py-3 text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider"><iconify-icon icon="mdi:chevron-down" class="text-[color:var(--paper-dim)] text-lg"></iconify-icon></th>
 									<th class="px-3 py-3 text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider cursor-pointer hover:text-[color:var(--accent)] transition-colors" data-sort="title">Title</th>
-									<th class="px-3 py-3 text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider hidden lg:table-cell cursor-pointer hover:text-[color:var(--accent)] transition-colors" data-sort="listed_at">Posted</th>
+									<th class="px-3 py-3 text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider hidden lg:table-cell cursor-pointer hover:text-[color:var(--accent)] transition-colors" data-sort="date">Posted</th>
 									<th class="px-3 py-3 text-left text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider hidden lg:table-cell cursor-pointer hover:text-[color:var(--accent)] transition-colors" data-sort="analyzed_at">Analyzed</th>
-									<th class="px-3 py-3 text-right text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider hidden md:table-cell cursor-pointer hover:text-[color:var(--accent)] transition-colors" data-sort="price_sgd">Price</th>
+									<th class="px-3 py-3 text-right text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider cursor-pointer hover:text-[color:var(--accent)] transition-colors" data-sort="price">Price</th>
 									<th class="px-3 py-3 text-right text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider hidden md:table-cell cursor-pointer hover:text-[color:var(--accent)] transition-colors" data-sort="total_intrinsic_value">Intrinsic Value</th>
 									<th class="px-3 py-3 text-center text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider cursor-pointer hover:text-[color:var(--accent)] transition-colors" data-sort="deal_score">Deal Score</th>
 									<th class="w-12 px-3 py-3 text-center text-xs font-semibold text-[color:var(--paper-dim)] uppercase tracking-wider"><iconify-icon icon="mdi:open-in-new" class="text-[color:var(--paper-dim)] text-lg"></iconify-icon></th>
@@ -282,12 +289,12 @@ const formatDate = (dateStr: string) => {
 												<iconify-icon icon="mdi:chevron-down" class="text-[color:var(--paper-dim)] text-lg transition-transform duration-200 expand-icon"></iconify-icon>
 											</td>
 											<td class="px-3 py-3">
-												<p class="font-medium text-[color:var(--paper)] group-hover:text-[color:var(--accent)] transition-colors truncate max-w-xs md:max-w-md lg:max-w-lg" title={deal.title}>{deal.title}</p>
+												<p class="font-medium text-[color:var(--paper)] group-hover:text-[color:var(--accent)] transition-colors truncate max-w-[12rem] sm:max-w-xs md:max-w-md lg:max-w-lg" title={deal.title}>{deal.title}</p>
 											</td>
 											<td class="px-3 py-3 text-xs text-[color:var(--paper-dim)] hidden lg:table-cell">{formatDate(deal.listed_at)}</td>
 											<td class="px-3 py-3 text-xs text-[color:var(--paper-dim)] hidden lg:table-cell">{formatDate(deal.analyzed_at)}</td>
-											<td class="px-3 py-3 text-right hidden md:table-cell">
-												<span class="font-semibold text-[color:var(--accent)] text-sm">S${deal.price_sgd.toFixed(2)}</span>
+											<td class="px-3 py-3 text-right">
+												<span class="font-semibold text-[color:var(--accent)] text-sm whitespace-nowrap">S${deal.price_sgd.toFixed(2)}</span>
 											</td>
 											<td class="px-3 py-3 text-right hidden md:table-cell">
 												<span class="font-semibold text-[color:var(--paper)] text-sm">S${deal.total_intrinsic_value.toFixed(2)}</span>
@@ -384,7 +391,7 @@ const formatDate = (dateStr: string) => {
 				// Handle column sorting
 					const sortHeader = target.closest('th[data-sort]') as HTMLTableCellElement | null;
 				if (sortHeader) {
-					const currentSort = new URLSearchParams(window.location.search).get('sort') || 'score_desc';
+					const currentSort = new URLSearchParams(window.location.search).get('sort') || 'deal_score_desc';
 					const column = sortHeader.dataset.sort;
 						if (!column) return;
 					let newSort = column + '_desc';

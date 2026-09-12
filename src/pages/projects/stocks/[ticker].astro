@@ -250,7 +250,7 @@ if (quote) {
 									{peers.peers.map((p) => (
 										<tr>
 											<td class="py-2 pr-4">
-												<span class="font-mono font-semibold text-[color:var(--accent)]">{p.ticker}</span>
+												<a href={`/projects/stocks/${encodeURIComponent(p.ticker)}`} class="font-mono font-semibold text-[color:var(--accent)] hover:text-[color:var(--paper)] transition">{p.ticker}</a>
 												<span class="ml-2 text-[color:var(--paper-dim)] hidden md:inline">{p.shortName}</span>
 											</td>
 											<td class="py-2 pr-4 font-mono">{p.pe !== null ? p.pe.toFixed(1) : "—"}</td>
@@ -321,7 +321,7 @@ if (quote) {
 							</div>
 						</div>
 
-						<div class="mt-4 grid grid-cols-3 gap-4 text-sm border-t border-[color:var(--ink-700)] pt-4">
+						<div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm border-t border-[color:var(--ink-700)] pt-4">
 							<div><span class="font-semibold text-[color:var(--paper)]">{cur(quote.currency)}{formatNumber(fairValue.low, 2)}</span> Band low</div>
 							<div><span class="font-semibold text-[color:var(--accent)]">{cur(quote.currency)}{formatNumber(fairValue.impliedPrice, 2)}</span> Implied</div>
 							<div><span class="font-semibold text-[color:var(--paper)]">{cur(quote.currency)}{formatNumber(fairValue.high, 2)}</span> Band high</div>
