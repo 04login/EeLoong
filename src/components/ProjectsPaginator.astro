@@ -100,7 +100,11 @@ let touchStartY = 0;
 let touchStartTime = 0;
 const expanded = new Set<string>();
 
-const getItemsPerPage = (): number => (window.innerWidth >= 1024 ? 3 : 2);
+const getItemsPerPage = (): number => {
+	if (window.innerWidth >= 1024) return 3;
+	if (window.innerWidth >= 768) return 2;
+	return 1;
+};
 const transitionMs = 320;
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
