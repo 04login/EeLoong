@@ -29,7 +29,7 @@ const { projects } = Astro.props;
 			id="prev-btn"
 			type="button"
 			aria-label="Previous projects page"
-			class="absolute left-0 top-0 bottom-0 z-20 w-14 md:w-20 flex items-center justify-start pl-1 md:pl-3 bg-gradient-to-r from-[color:var(--ink-800)]/95 via-[color:var(--ink-800)]/60 to-transparent opacity-100 md:opacity-0 md:group-hover/paginator:opacity-100 md:group-focus-within/paginator:opacity-100 focus-visible:opacity-100 transition-all duration-300 ease-out disabled:opacity-0! disabled:pointer-events-none cursor-pointer group/btn rounded-l-xl"
+			class="absolute left-0 top-0 bottom-0 z-20 w-14 md:w-20 hidden md:flex items-center justify-start pl-1 md:pl-3 bg-gradient-to-r from-[color:var(--ink-800)]/95 via-[color:var(--ink-800)]/60 to-transparent md:opacity-0 md:group-hover/paginator:opacity-100 md:group-focus-within/paginator:opacity-100 focus-visible:opacity-100 transition-all duration-300 ease-out disabled:opacity-0! disabled:pointer-events-none cursor-pointer group/btn rounded-l-xl"
 		>
 			<span class="h-11 w-11 md:h-12 md:w-12 rounded-full border border-[color:var(--ink-500)] bg-[color:var(--ink-850)] text-[color:var(--paper)] group-hover/btn:border-[color:var(--accent)] group-hover/btn:bg-[color:var(--accent)] group-hover/btn:scale-110 active:scale-95 shadow-xl shadow-black/40 transition-all duration-200 flex items-center justify-center">
 				<iconify-icon icon="mdi:chevron-left" class="text-3xl md:text-4xl"></iconify-icon>
@@ -40,7 +40,7 @@ const { projects } = Astro.props;
 			id="next-btn"
 			type="button"
 			aria-label="Next projects page"
-			class="absolute right-0 top-0 bottom-0 z-20 w-14 md:w-20 flex items-center justify-end pr-1 md:pr-3 bg-gradient-to-l from-[color:var(--ink-800)]/95 via-[color:var(--ink-800)]/60 to-transparent opacity-100 md:opacity-0 md:group-hover/paginator:opacity-100 md:group-focus-within/paginator:opacity-100 focus-visible:opacity-100 transition-all duration-300 ease-out disabled:opacity-0! disabled:pointer-events-none cursor-pointer group/btn rounded-r-xl"
+			class="absolute right-0 top-0 bottom-0 z-20 w-14 md:w-20 hidden md:flex items-center justify-end pr-1 md:pr-3 bg-gradient-to-l from-[color:var(--ink-800)]/95 via-[color:var(--ink-800)]/60 to-transparent md:opacity-0 md:group-hover/paginator:opacity-100 md:group-focus-within/paginator:opacity-100 focus-visible:opacity-100 transition-all duration-300 ease-out disabled:opacity-0! disabled:pointer-events-none cursor-pointer group/btn rounded-r-xl"
 		>
 			<span class="h-11 w-11 md:h-12 md:w-12 rounded-full border border-[color:var(--ink-500)] bg-[color:var(--ink-850)] text-[color:var(--paper)] group-hover/btn:border-[color:var(--accent)] group-hover/btn:bg-[color:var(--accent)] group-hover/btn:scale-110 active:scale-95 shadow-xl shadow-black/40 transition-all duration-200 flex items-center justify-center">
 				<iconify-icon icon="mdi:chevron-right" class="text-3xl md:text-4xl"></iconify-icon>
@@ -53,7 +53,24 @@ const { projects } = Astro.props;
 		<div id="page-info" class="flex items-center justify-center gap-2" role="tablist" aria-label="Project pages">
 		</div>
 	</div>
+	<p id="swipe-hint" class="md:hidden flex items-center justify-center gap-1.5 text-[11px] text-[color:var(--paper-dim)]/70 select-none transition-opacity duration-500" aria-hidden="true">
+		<iconify-icon icon="mdi:gesture-swipe-horizontal" class="text-base"></iconify-icon>
+		<span>swipe to explore</span>
+	</p>
 </div>
+
+<style>
+	#swipe-hint svg, #swipe-hint iconify-icon {
+		animation: swipe-nudge 2.4s ease-in-out infinite;
+	}
+	@keyframes swipe-nudge {
+		0%, 100% { transform: translateX(-3px); opacity: 0.6; }
+		50% { transform: translateX(3px); opacity: 1; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		#swipe-hint svg, #swipe-hint iconify-icon { animation: none; }
+	}
+</style>
 
 <script>
 const paginator = document.getElementById('projects-paginator') as HTMLElement;
@@ -62,6 +79,8 @@ const prevBtn = document.getElementById('prev-btn') as HTMLButtonElement;
 const nextBtn = document.getElementById('next-btn') as HTMLButtonElement;
 const pageInfo = document.getElementById('page-info') as HTMLElement;
 const pageCount = document.getElementById('page-count') as HTMLElement;
+const swipeHint = document.getElementById('swipe-hint') as HTMLElement | null;
+let hintDismissed = false;
 
 type PaginatorProject = {
 	title: string;
@@ -96,6 +115,11 @@ const renderPageDots = (totalPages: number): void => {
 		return `<button type="button" role="tab" aria-selected="${active}" aria-label="Go to projects page ${pageIndex + 1}" data-page="${pageIndex}" class="rounded-full transition-all duration-200 cursor-pointer ${active ? 'h-2 w-6 bg-[color:var(--accent)]' : 'h-2 w-2 bg-[color:var(--ink-600)] hover:bg-[color:var(--paper-dim)] hover:scale-125'}"></button>`;
 	}).join('');
 	pageCount.textContent = totalPages > 1 ? `${currentPage + 1} / ${totalPages}` : '';
+	if (swipeHint) {
+		const show = totalPages > 1 && !hintDismissed;
+		swipeHint.classList.toggle('opacity-0', !show);
+		swipeHint.classList.toggle('hidden', !show);
+	}
 };
 
 const renderCard = (project: PaginatorProject, globalIndex: number): string => {
@@ -270,6 +294,13 @@ grid.addEventListener('touchend', (event) => {
 
 	const isHorizontalSwipe = Math.abs(deltaX) > 50 && Math.abs(deltaY) < 40 && elapsedMs < 650;
 	if (!isHorizontalSwipe) return;
+
+	// First successful swipe: fade out the mobile hint for good
+	if (!hintDismissed) {
+		hintDismissed = true;
+		swipeHint?.classList.add('opacity-0');
+		window.setTimeout(() => swipeHint?.classList.add('hidden'), 500);
+	}
 
 	if (deltaX < 0 && currentPage < totalPages - 1) {
 		currentPage++;
