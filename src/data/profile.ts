@@ -59,7 +59,7 @@ export const workExperience = [
 	{
 		id: 1,
 		company: 'Aztech Technologies',
-		logo: '/images/aztech.png',
+		logo: '/images/aztech.svg',
 		role: 'R&D Software Engineer',
 		period: 'Jun 2026 - Present',
 		location: 'Singapore',
