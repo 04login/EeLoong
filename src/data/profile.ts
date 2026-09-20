@@ -3,7 +3,7 @@ export const me = {
 	title: 'Graphics Programmer & Software Engineer',
 	location: 'Singapore',
 	phone: '+65 88012145',
-	summary: 'I love building products that come to life, whether it is designing a graphics engine for a game or developing an intuitive Android app. Seeing my creations in action fuels my passion for coding and problem solving. Through my Polytechnic Diploma & Bachelor\'s program, I honed my skills in C++, C, Computer Graphics, and Android Development while leading projects in team environments.',
+	summary: 'I\'m a Computer Science graduate with hands-on experience building production web applications in C# and ASP.NET Core, and strong fundamentals in backend systems programming with C/C++. I love building products that come to life — whether it is a graphics engine for a game, an embedded gateway service, or a data-heavy internal tool — and I\'m motivated by shipping software that works reliably in production.',
 	LinkedIn: 'https://www.linkedin.com/in/low-ee-loong/',
 	Email: 'mailto:eeloonglow@gmail.com'
 };
@@ -36,9 +36,9 @@ export const education = [
 
 		],
 		degree: 'Bachelor of Science in Computer Science in Real-Time Interactive Simulation',
-		period: 'Oct 2022 - Apr 2026',
-		status: 'Current',
-		isCurrent: true
+		period: 'Oct 2022 - May 2026',
+		status: 'Completed',
+		isCurrent: false
 	},
 	{
 		id: 2,
@@ -58,21 +58,36 @@ export const education = [
 export const workExperience = [
 	{
 		id: 1,
+		company: 'Aztech Technologies',
+		logo: '/images/aztech.png',
+		role: 'R&D Software Engineer',
+		period: 'Jun 2026 - Present',
+		location: 'Singapore',
+		current: true,
+		achievements: [
+			'Extended a C++ Linux daemon bus service with new inter-process communication features between Wi-SUN mesh smart lighting node devices and the Linux gateway they connect to',
+			'Built an OTA firmware transfer pipeline alongside the signal-handling and logging layer for the embedded gateway service, allowing smart lighting nodes to be updated wirelessly'
+		],
+		technologies: ['C++', 'Linux', 'IPC', 'Wi-SUN', 'Embedded Systems']
+	},
+	{
+		id: 2,
 		company: 'Seagate Technology',
 		logo: '/images/seagate.jpg',
 		role: 'Software Development Intern',
 		period: 'May 2025 - Apr 2026',
 		location: 'Singapore',
-		current: true,
+		current: false,
 		achievements: [
-			'Developed a C .NET Vertically Integrated Quality System web application for parameter management',
-			'Created an accompanying Java backend data exporter for the system which ran on 15 minute schedule',
-			'Created and manipulated Oracle SQL tables to work with the Vertically Integrated Quality System'
+			'Modernised a legacy VB.NET WebForms application to ASP.NET Core 8.0 MVC, implementing LDAP authentication and role-based access control across three permission tiers',
+			'Designed and built a Java backend data exporter integrating Oracle SQL with Hadoop, eliminating ~320 duplicate records per week through SQL MERGE operations and window function deduplication',
+			'Built an interactive data management UI using ASP.NET Core MVC, DataTables, and Select2',
+			'Developed and maintained the Oracle SQL schema, including table design, stored procedures, and a staging-table ETL pipeline feeding downstream Tableau dashboards'
 		],
-		technologies: ['C#', '.NET', 'Java', 'Oracle SQL']
+		technologies: ['C#', 'ASP.NET Core', 'VB.NET', 'Java', 'Oracle SQL', 'Hadoop', 'Tableau']
 	},
 	{
-		id: 2,
+		id: 3,
 		company: 'ST Engineering',
 		logo: '/images/STEngineering.png',
 		role: 'Product Test Intern / Assistant Engineer',
@@ -194,9 +209,9 @@ export const projects: Project[] = [
 
 export const skills = {
 	languages: ['C++', 'C', 'C#', 'Python', 'Java', 'SQL', 'Kotlin', 'Assembly', 'CUDA', 'LATEX'],
-	tools: ['OpenGL', 'Visual Studio 2022', 'Nvidia Nsight', 'Nvidia Compute', 'Android Studio', 'Git', 'GitHub'],
+	tools: ['OpenGL', 'ASP.NET Core', 'Visual Studio 2022', 'Nvidia Nsight', 'Nvidia Compute', 'Android Studio', 'Git', 'GitHub'],
 	fundamentals: ['Data Structures', 'Operating System Fundamentals', 'Computer Networks', 'Algorithm Analysis', 'Collision Detection', 'Pathfinding Algorithms'],
-	soft: ['Team Leadership', 'Project Planning', 'Communication'],
+	soft: ['Team Leadership', 'Project Planning', 'Communication', 'Agile/Scrum'],
 	spokenLanguages: [
 		{ language: 'English', level: 'Native Fluency' },
 		{ language: 'Chinese', level: 'Professional Working Fluency' }
