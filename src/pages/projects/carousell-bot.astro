@@ -34,6 +34,7 @@ let searches: Search[] = [];
 // Handle URL parameters for filtering
 const url = new URL(Astro.request.url);
 const filterSearchId = url.searchParams.get("search_id") || "all";
+const listingId = url.searchParams.get("listing_id") || "";
 const textQuery = url.searchParams.get("q") || "";
 const sortOption = url.searchParams.get("sort") || "score_desc";
 const timeOption = url.searchParams.get("time") || "all";
@@ -46,22 +47,22 @@ if (db) {
     }
 
 	// 2. Build the query dynamically based on filters
-    let queryArgs = [];
-    let whereClauses = ["a.deal_score > 0", "l.is_active = TRUE"];
+	let queryArgs = listingId ? [listingId] : [];
+	let whereClauses = listingId ? ["l.listing_id = ?"] : ["a.deal_score > 0", "l.is_active = TRUE"];
 
-    if (filterSearchId !== "all") {
+	if (!listingId && filterSearchId !== "all") {
         whereClauses.push("l.search_id = ?");
         queryArgs.push(filterSearchId);
     }
 
-    if (textQuery) {
+	if (!listingId && textQuery) {
         whereClauses.push("(l.title LIKE ? OR l.description LIKE ?)");
         queryArgs.push(`%${textQuery}%`);
         queryArgs.push(`%${textQuery}%`);
     }
 
     // Add time filter logic
-    if (timeOption !== "all") {
+	if (!listingId && timeOption !== "all") {
         if (timeOption === "1d") {
             whereClauses.push("l.listed_at >= datetime('now', '-1 day')");
         } else if (timeOption === "3d") {
@@ -384,7 +385,9 @@ const formatDate = (dateStr: string) => {
 			</div>
 		</main>
 
-		<script>
+		<script define:vars={{ listingId }}>
+			const deepLinkedListingId = listingId;
+
 			document.addEventListener('click', (e: MouseEvent) => {
 					const target = e.target as HTMLElement | null;
 					if (!target) return;
@@ -430,6 +433,18 @@ const formatDate = (dateStr: string) => {
 					}
 				}
 			});
+
+			if (deepLinkedListingId) {
+				const row = document.querySelector(`tr[data-deal-id="${CSS.escape(deepLinkedListingId)}"]`) as HTMLTableRowElement | null;
+				const expandRow = document.querySelector(`tr.expand-row[data-deal-id="${CSS.escape(deepLinkedListingId)}"]`) as HTMLTableRowElement | null;
+				const icon = row?.querySelector('.expand-icon') as HTMLElement | null;
+
+				if (row && expandRow) {
+					expandRow.classList.remove('hidden');
+					if (icon) icon.style.transform = 'rotate(180deg)';
+					row.scrollIntoView({ block: 'center' });
+				}
+			}
 		</script>
 	</body>
 </html>
