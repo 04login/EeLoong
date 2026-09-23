@@ -172,7 +172,7 @@ const formatDate = (dateStr: string) => {
             }
         </style>
 	</head>
-	<body class="min-h-screen bg-[color:var(--ink-900)] text-[color:var(--paper)]">
+	<body class="min-h-screen bg-[color:var(--ink-900)] text-[color:var(--paper)]" data-deep-linked-listing-id={listingId || undefined}>
 		<main class="w-full max-w-[96%] xl:max-w-[90%] mx-auto pb-12 pt-4 md:pt-8 md:px-8">
 			<!-- Header -->
             <div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -385,8 +385,8 @@ const formatDate = (dateStr: string) => {
 			</div>
 		</main>
 
-		<script define:vars={{ listingId }}>
-			const deepLinkedListingId = listingId;
+		<script>
+			const deepLinkedListingId = document.body.dataset.deepLinkedListingId || '';
 
 			document.addEventListener('click', (e: MouseEvent) => {
 					const target = e.target as HTMLElement | null;
