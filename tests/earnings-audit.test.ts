@@ -10,6 +10,8 @@ import {
   computeAdjustment,
   normalizeImpactOn,
   filterLabeledItems,
+  mirrorReported,
+  pegBasis,
 } from "../src/lib/stock-research/pipeline/earnings-audit.ts";
 import type { TickerQuote } from "../src/lib/stock-research/types.ts";
 
@@ -210,6 +212,56 @@ test("normalizeImpactOn keeps only known kinds and defaults to eps", () => {
   assert.deepEqual(normalizeImpactOn(["book", "book"]), ["book"]);
   assert.deepEqual(normalizeImpactOn(undefined), ["eps"]);
   assert.deepEqual(normalizeImpactOn(["bogus"]), ["eps"]);
+});
+
+test("pegBasis: Yahoo's published PEG anchors both rows (INR case)", () => {
+  // INR: Yahoo publishes pegRatio 0.13 but no earningsGrowth, so the old
+  // P/E÷growth formula printed "—" in the audit while the card above showed
+  // 0.13. The published figure now anchors both.
+  const basis = pegBasis(quote({ trailingPE: 4.3, pegRatio: 0.13, earningsGrowth: null }));
+  assert.equal(basis.reportedPeg, 0.13);
+  assert.equal(Math.round(basis.pegForPe(3.19) * 1000) / 1000, Math.round((3.19 * 0.13) / 4.3 * 1000) / 1000);
+  assert.equal(basis.pegForPe(null), null);
+  assert.equal(basis.pegForPe(-1), null);
+});
+
+test("pegBasis: falls back to P/E ÷ growth, then to null", () => {
+  const withGrowth = pegBasis(quote({ trailingPE: 20, pegRatio: null, earningsGrowth: 0.1 }));
+  assert.equal(withGrowth.reportedPeg, 2); // 20 ÷ 10%
+  assert.equal(withGrowth.pegForPe(10), 1); // 10 ÷ 10%
+  const neither = pegBasis(quote({ trailingPE: 20, pegRatio: null, earningsGrowth: null }));
+  assert.equal(neither.reportedPeg, null);
+  assert.equal(neither.pegForPe(10), null);
+});
+
+test("computeAdjustment: adjusted PEG keeps the reported PEG's basis", () => {
+  const adj = computeAdjustment(
+    quote({ price: 20, epsTrailingTwelveMonths: 2, trailingPE: 10, pegRatio: 1.5, marketCap: 200_000_000 }),
+    [{ label: "Impairment", amount: 5_000_000, impact: "charge", impactOn: ["eps"] }],
+  );
+  // adjusted EPS 2.5 → adjusted P/E 8 → scaled by the published basis 1.5/10.
+  assert.equal(adj.adjustedEps, 2.5);
+  assert.equal(adj.adjustedPe, 8);
+  assert.equal(adj.adjustedPeg, 8 * (1.5 / 10));
+});
+
+test("mirrorReported keeps the adjusted row filled when nothing was stripped", () => {
+  // Regression: with no one-off items the panel used to render no EPS/P/E/PEG
+  // tiles at all, which reads as "the feature was deleted". Adjusted figures
+  // mirror the reported ones instead (footnoted "unchanged" in the UI).
+  const mirrored = mirrorReported(quote({ trailingPE: 4.3, epsTrailingTwelveMonths: 3.04, earningsGrowth: 0.2 }));
+  assert.equal(mirrored.adjustedEps, 3.04);
+  assert.equal(mirrored.adjustedPe, 4.3);
+  assert.equal(mirrored.adjustedPeg, 4.3 / 20); // P/E ÷ growth%
+  assert.equal(mirrored.netOneOff, 0);
+  assert.equal(mirrored.adjustedReliable, true);
+});
+
+test("mirrorReported leaves genuinely uncomputable values null", () => {
+  const mirrored = mirrorReported(quote({ epsTrailingTwelveMonths: null, trailingPE: null, pegRatio: null }));
+  assert.equal(mirrored.reportedEps, null);
+  assert.equal(mirrored.adjustedEps, null);
+  assert.equal(mirrored.adjustedPe, null);
 });
 
 test("filterLabeledItems drops invented amounts and unknown impact kinds", () => {

@@ -59,8 +59,10 @@ export type AuditItem = {
 
 // "ok"          — the model labeled usable items
 // "empty"       — the model ran and found nothing genuinely one-off
-// "unavailable" — the model step failed; items are unknown, not absent
-export type AuditLabeling = "ok" | "empty" | "unavailable";
+// "filtered"    — the model DID return items, but none survived verification
+//                 (amounts must match the filing); items are unknown, not absent
+// "unavailable" — the model step failed outright
+export type AuditLabeling = "ok" | "empty" | "filtered" | "unavailable";
 
 export type AuditResult = {
   ticker: string;
@@ -121,6 +123,42 @@ function pegFor(pe: number | null, growth: number | null): number | null {
   return pe / (growth * 100);
 }
 
+// One basis for every PEG the panel prints, matching the top card's own
+// priority: Yahoo's published `pegRatio` first, else P/E ÷ earningsGrowth.
+// Mixing the two is what made the panel look broken — for INR the card showed
+// PEG 0.13 (Yahoo's figure) while the audit printed "—" because Yahoo published
+// no earnings-growth rate, and for MSFT the card said 1.68 while the audit said
+// 0.91 (implied growth 17% vs the 31.7% `earningsGrowth` field).
+//
+// `pegForPe` keeps the ADJUSTED PEG on the same basis as the reported one by
+// scaling: adjustedPeg = adjustedP/E × (reportedPEG ÷ reportedP/E).
+// Exported for tests.
+export function pegBasis(quote: TickerQuote): {
+  reportedPe: number | null;
+  reportedPeg: number | null;
+  pegForPe: (pe: number | null) => number | null;
+} {
+  const reportedPe =
+    typeof quote.trailingPE === "number" && isFinite(quote.trailingPE) && quote.trailingPE > 0
+      ? quote.trailingPE
+      : null;
+  const growth = growthOf(quote);
+  const published =
+    typeof quote.pegRatio === "number" && isFinite(quote.pegRatio) && quote.pegRatio > 0
+      ? quote.pegRatio
+      : null;
+
+  const reportedPeg = published ?? pegFor(reportedPe, growth);
+
+  const pegForPe = (pe: number | null): number | null => {
+    if (pe === null || !isFinite(pe) || pe <= 0) return null;
+    if (published !== null && reportedPe !== null) return (pe * published) / reportedPe;
+    return pegFor(pe, growth);
+  };
+
+  return { reportedPe, reportedPeg, pegForPe };
+}
+
 // Adjusted EPS = reported EPS − (net one-off effect / share count), where
 // share count = market cap / price. Adjusted PE = price / adjusted EPS
 // (only when adjusted EPS > 0); PEG pairs each P/E with Yahoo's growth.
@@ -151,12 +189,7 @@ export function computeAdjustment(
       ? quote.epsTrailingTwelveMonths
       : null;
   const price = quote.price;
-  const reportedPe =
-    typeof quote.trailingPE === "number" && isFinite(quote.trailingPE) && quote.trailingPE > 0
-      ? quote.trailingPE
-      : null;
-  const growth = growthOf(quote);
-  const reportedPeg = pegFor(reportedPe, growth);
+  const { reportedPe, reportedPeg, pegForPe } = pegBasis(quote);
 
   // No adjustment possible — reported values stand alone, nothing flagged.
   const bare = {
@@ -187,7 +220,7 @@ export function computeAdjustment(
   const epsDelta = net / shares;
   const adjustedEps = reportedEps - epsDelta;
   const adjustedPe = adjustedEps > 0 ? price / adjustedEps : null;
-  const adjustedPeg = pegFor(adjustedPe, growth);
+  const adjustedPeg = pegForPe(adjustedPe);
 
   return {
     reportedEps,
@@ -199,6 +232,39 @@ export function computeAdjustment(
     netOneOff: net,
     oneOffMultiple,
     adjustedReliable: oneOffMultiple === null || oneOffMultiple < ADJUSTMENT_RELIABILITY_CAP,
+  };
+}
+
+// Nothing to adjust ⇒ the reported figures ARE the adjusted figures. The panel
+// shows them (footnoted "unchanged") rather than an empty row, which reads as
+// "the feature disappeared". Only genuinely uncomputable input stays null.
+// Exported for tests.
+export function mirrorReported(quote: TickerQuote): {
+  reportedEps: number | null;
+  adjustedEps: number | null;
+  reportedPe: number | null;
+  adjustedPe: number | null;
+  reportedPeg: number | null;
+  adjustedPeg: number | null;
+  netOneOff: number;
+  oneOffMultiple: number | null;
+  adjustedReliable: boolean;
+} {
+  const reportedEps =
+    typeof quote.epsTrailingTwelveMonths === "number" && isFinite(quote.epsTrailingTwelveMonths)
+      ? quote.epsTrailingTwelveMonths
+      : null;
+  const { reportedPe, reportedPeg } = pegBasis(quote);
+  return {
+    reportedEps,
+    adjustedEps: reportedEps,
+    reportedPe,
+    adjustedPe: reportedPe,
+    reportedPeg,
+    adjustedPeg: reportedPeg,
+    netOneOff: 0,
+    oneOffMultiple: null,
+    adjustedReliable: true,
   };
 }
 
@@ -285,10 +351,13 @@ export async function getEarningsAudit(
   });
 
   const fyEnd = filing.periodEnd;
-  // v5: the result shape changed (impactOn per item, book value, reliability
-  // flag) and the LLM contract gained `impactOn` — v4 entries have neither, and
-  // v4 was itself the bump past the inert period-filter bug.
-  const cacheKey = `audit:v5:${t}:${fyEnd}`;
+  // v6: the no-items case now mirrors the reported figures into the adjusted
+  // slots (so the panel keeps its EPS/P/E/PEG row), and zero-item outcomes are
+  // split into "empty" vs "filtered". A v5 entry can carry `adjusted: null`
+  // with no items, which renders as an empty row.
+  // History: v5 added `impactOn` + book value + the reliability flag; v4 was
+  // the bump past the inert period-filter bug; v3 and older are orphaned.
+  const cacheKey = `audit:v6:${t}:${fyEnd}`;
 
   // 3. Cache hit?
   const cached = await kvGet<AuditResult>(kv, cacheKey);
@@ -337,16 +406,23 @@ export async function getEarningsAudit(
       );
       trace?.log("audit: LLM labeler returned", { preview: JSON.stringify(normalized).slice(0, 300) });
       console.log("[stocks:audit] LLM returned:", JSON.stringify(normalized).slice(0, 500));
+      const modelItems = Array.isArray(normalized?.items) ? (normalized!.items as unknown[]).length : 0;
       const items = filterLabeledItems(normalized?.items, rawRows);
       if (items.length > 0) {
         labeled = items;
         llmSummary = typeof normalized?.summary === "string" ? normalized.summary : null;
         labeling = "ok";
+      } else {
+        // The two zero-item outcomes mean opposite things and must not share a
+        // summary: "the model saw nothing genuine" vs "the model's candidates
+        // were all thrown out by verification".
+        labeling = modelItems > 0 ? "filtered" : "empty";
       }
       source = "xbrl+llm";
       trace?.log("audit: provenance filter kept items", {
-        in: (normalized?.items as unknown[] | undefined)?.length ?? 0,
+        in: modelItems,
         kept: items.length,
+        labeling,
       });
     } catch (e) {
       // LLM unavailable → no fake adjustments. But the filing-derived book
@@ -371,25 +447,10 @@ export async function getEarningsAudit(
   });
 
   // "Nothing genuinely one-off" is a valid audit outcome — report it honestly.
+  // With no items there is nothing to strip, so the adjusted figures mirror the
+  // reported ones and the panel keeps its full row.
   const foundItems = labeled.length > 0;
-  const adj = foundItems
-    ? computeAdjustment(quote, epsItems)
-    : {
-        reportedEps: quote.epsTrailingTwelveMonths ?? null,
-        adjustedEps: null,
-        reportedPe: quote.trailingPE ?? null,
-        adjustedPe: null,
-        reportedPeg: pegFor(
-          typeof quote.trailingPE === "number" && isFinite(quote.trailingPE) && quote.trailingPE > 0
-            ? quote.trailingPE
-            : null,
-          growthOf(quote),
-        ),
-        adjustedPeg: null,
-        netOneOff: 0,
-        oneOffMultiple: null,
-        adjustedReliable: true,
-      };
+  const adj = foundItems ? computeAdjustment(quote, epsItems) : mirrorReported(quote);
 
   const book = raw.book ? computeBookValue(raw.book, quote, bookItems) : null;
   trace?.log(
@@ -425,18 +486,20 @@ export async function getEarningsAudit(
     summary: foundItems
       ? llmSummary
       : labeling === "unavailable"
-        ? "One-off labeling unavailable (the model step failed) — nothing was adjusted, and the book-value figures in this panel come straight from the filing."
-        : "No material one-off items identified in the latest filing.",
+        ? "One-off labeling unavailable (the model step failed) — nothing was adjusted, so the figures above are the reported ones, and the book value comes straight from the filing."
+        : labeling === "filtered"
+          ? "The model's candidate items didn't survive verification against the filing — nothing was adjusted, so the figures above are the reported ones. Reload to retry the labeling step."
+          : "No material one-off items identified in the latest filing — the figures above are the reported ones, unchanged.",
     source,
   };
 
-  // 7. Cache (months TTL). A "labeling unavailable" run is NOT cached — that
-  // would pin a missing model result for months, and the next view should try
-  // the model again.
-  if (labeling !== "unavailable") {
+  // 7. Cache (months TTL). Only genuine verdicts are worth pinning for months:
+  // a "filtered" run means the model's output was unusable and an "unavailable"
+  // run means it never answered — caching either would freeze a bad draw.
+  if (labeling === "ok" || labeling === "empty") {
     await kvPut(kv, cacheKey, result, CACHE_TTL.audit);
   } else {
-    trace?.log("audit: not cached (labeling unavailable)", { cacheKey });
+    trace?.log("audit: not cached", { cacheKey, labeling });
   }
   trace?.log("audit: done", { items: labeled.length, period, hasBook: !!book });
   return result;

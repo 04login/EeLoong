@@ -28,8 +28,17 @@ const IMPACT_LABELS: Record<ImpactKind, string> = {
 };
 
 const hasItems = audit.items.length > 0;
+// The earnings row renders whenever there is anything to show. When the audit
+// finds nothing to strip, the adjusted figures ARE the reported ones (the
+// pipeline mirrors them) — hiding the row in that case made the whole feature
+// look deleted.
+const showEarnings =
+	hasItems || audit.adjustedEps !== null || audit.adjustedPe !== null || audit.adjustedPeg !== null;
 const num = (v: number | null, d = 2) => (v !== null ? v.toFixed(d) : "—");
-const reportedFootnote = (v: number | null, d = 2) => `reported ${formatNumber(v, d)}`;
+// Footnote under an adjusted value: the reported figure it came from, or an
+// explicit "unchanged" when there was nothing to adjust.
+const adjustFootnote = (reported: number | null, d = 2) =>
+	hasItems ? `reported ${formatNumber(reported, d)}` : "unchanged — nothing to adjust";
 ---
 
 <div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
@@ -67,19 +76,19 @@ const reportedFootnote = (v: number | null, d = 2) => `reported ${formatNumber(v
 		</div>
 	)}
 
-	{hasItems && (
+	{showEarnings && (
 		<>
 			<p class="text-xs font-semibold uppercase tracking-wider text-[color:var(--paper-dim)] mb-3">Earnings — adjusted</p>
 			<div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
 				<RatioTile
 					label="Adjusted EPS"
 					value={formatNumber(audit.adjustedEps, 2)}
-					footnote={reportedFootnote(audit.reportedEps)}
+					footnote={adjustFootnote(audit.reportedEps)}
 					signalKind="none"
 					colorClass="text-[color:var(--accent)]"
 				/>
-				<RatioTile label="Adjusted P/E" value={num(audit.adjustedPe)} footnote={reportedFootnote(audit.reportedPe)} />
-				<RatioTile label="Adjusted PEG" value={num(audit.adjustedPeg)} footnote={reportedFootnote(audit.reportedPeg)} />
+				<RatioTile label="Adjusted P/E" value={num(audit.adjustedPe)} footnote={adjustFootnote(audit.reportedPe)} />
+				<RatioTile label="Adjusted PEG" value={num(audit.adjustedPeg)} footnote={adjustFootnote(audit.reportedPeg)} />
 			</div>
 
 			{!audit.adjustedReliable && (
