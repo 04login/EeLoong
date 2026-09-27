@@ -1,14 +1,35 @@
 ---
-// Earnings audit panel — one-off items between reported and adjusted EPS.
+// Earnings audit panel — one-off items, the adjusted ratios they distort, and
+// the book-value measures that no amount of earnings adjusting can fix.
 // Rendered both by the result page and by the async panel partial.
+//
+// Display decision (user): reported values do NOT get their own tiles — they
+// already sit in the Valuation Ratios card at the top of the page. Adjusted
+// values lead, with the reported figure as a small footnote underneath.
 import RatioTile from "./RatioTile.astro";
-import type { AuditResult } from "../../lib/stock-research/index.ts";
+import type { AuditResult, ImpactKind } from "../../lib/stock-research/index.ts";
 import { formatNumber } from "../../lib/stock-research/format.ts";
 
 interface Props {
 	audit: AuditResult;
 }
 const { audit } = Astro.props;
+
+const book = audit.book;
+
+// Which measures each one-off lands on (the LLM's classification, validated
+// server-side against a closed set).
+const IMPACT_LABELS: Record<ImpactKind, string> = {
+	eps: "EPS",
+	book: "BOOK",
+	goodwill: "GOODWILL",
+	cash: "CASH",
+	revenue: "REVENUE",
+};
+
+const hasItems = audit.items.length > 0;
+const num = (v: number | null, d = 2) => (v !== null ? v.toFixed(d) : "—");
+const reportedFootnote = (v: number | null, d = 2) => `reported ${formatNumber(v, d)}`;
 ---
 
 <div class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm">
@@ -29,46 +50,104 @@ const { audit } = Astro.props;
 		<span class="text-xs text-[color:var(--paper-dim)]">{audit.period} · {audit.source}</span>
 	</div>
 
-	{audit.items.length > 0 ? (
-		<>
-			<div class="space-y-2 mb-5">
-				{audit.items.map((it) => (
-					<div class="flex items-start justify-between gap-4 text-sm bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg px-3 py-2">
-						<div>
-							<span class="text-[color:var(--paper)] font-medium">{it.label}</span>
-							<span class={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded ${it.impact === "charge" ? "text-red-400 bg-red-400/10" : "text-green-400 bg-green-400/10"}`}>{it.impact === "charge" ? "CHARGE" : "GAIN"}</span>
-						</div>
-						<span class="font-mono text-[color:var(--paper-dim)]">{formatNumber(it.amount)}</span>
+	{hasItems && (
+		<div class="space-y-2 mb-5">
+			{audit.items.map((it) => (
+				<div class="flex items-start justify-between gap-4 text-sm bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg px-3 py-2">
+					<div class="flex flex-wrap items-center gap-2 min-w-0">
+						<span class="text-[color:var(--paper)] font-medium">{it.label}</span>
+						<span class={`text-[10px] font-bold px-1.5 py-0.5 rounded ${it.impact === "charge" ? "text-red-400 bg-red-400/10" : "text-green-400 bg-green-400/10"}`}>{it.impact === "charge" ? "CHARGE" : "GAIN"}</span>
+						{(it.impactOn ?? []).map((k) => (
+							<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded text-[color:var(--paper-dim)] bg-[color:var(--ink-700)]" title={`Lands on ${IMPACT_LABELS[k] ?? k}`}>{IMPACT_LABELS[k] ?? k}</span>
+						))}
 					</div>
-				))}
-			</div>
+					<span class="font-mono text-[color:var(--paper-dim)] whitespace-nowrap">{formatNumber(it.amount)}</span>
+				</div>
+			))}
+		</div>
+	)}
 
+	{hasItems && (
+		<>
+			<p class="text-xs font-semibold uppercase tracking-wider text-[color:var(--paper-dim)] mb-3">Earnings — adjusted</p>
 			<div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
-				<RatioTile label="Reported EPS" value={formatNumber(audit.reportedEps, 2)} />
 				<RatioTile
 					label="Adjusted EPS"
 					value={formatNumber(audit.adjustedEps, 2)}
-					colorClass={audit.adjustedEps !== null && audit.reportedEps !== null && audit.adjustedEps !== audit.reportedEps ? "text-[color:var(--accent)]" : ""}
+					footnote={reportedFootnote(audit.reportedEps)}
+					signalKind="none"
+					colorClass="text-[color:var(--accent)]"
 				/>
-				<RatioTile label="Reported P/E" value={audit.reportedPe !== null ? audit.reportedPe.toFixed(2) : "—"} />
-				<RatioTile
-					label="Adjusted P/E"
-					value={audit.adjustedPe !== null ? audit.adjustedPe.toFixed(2) : "—"}
-					colorClass={audit.adjustedPe !== null ? "text-[color:var(--accent)]" : "text-[color:var(--paper-muted)]"}
-				/>
-				<RatioTile label="Reported PEG" value={audit.reportedPeg !== null ? audit.reportedPeg.toFixed(2) : "—"} />
-				<RatioTile
-					label="Adjusted PEG"
-					value={audit.adjustedPeg !== null ? audit.adjustedPeg.toFixed(2) : "—"}
-					colorClass={audit.adjustedPeg !== null ? "text-[color:var(--accent)]" : "text-[color:var(--paper-muted)]"}
-				/>
+				<RatioTile label="Adjusted P/E" value={num(audit.adjustedPe)} footnote={reportedFootnote(audit.reportedPe)} />
+				<RatioTile label="Adjusted PEG" value={num(audit.adjustedPeg)} footnote={reportedFootnote(audit.reportedPeg)} />
 			</div>
+
+			{!audit.adjustedReliable && (
+				<p class="mt-4 text-xs text-[color:var(--warning)] italic">
+					⚠ One-offs net {formatNumber(audit.oneOffMultiple, 1)}× trailing earnings — the adjusted ratios above are arithmetically
+					correct but not meaningful at that size. Common causes: the filing's items and Yahoo's trailing EPS cover different
+					periods, the same event is tagged twice, or part of the item was already excluded from reported EPS (discontinued
+					operations sit below the continuing-operations line).
+				</p>
+			)}
 		</>
-	) : (
-		<p class="text-sm text-[color:var(--paper-dim)]">{audit.summary}</p>
 	)}
 
-	{audit.summary && audit.items.length > 0 && (
+	{book && (
+		<div class="mt-6 pt-5 border-t border-[color:var(--ink-700)]">
+			<p class="text-xs font-semibold uppercase tracking-wider text-[color:var(--paper-dim)] mb-3 flex items-center gap-2">
+				Book Value — P/Tangible-B
+				<button
+					type="button"
+					class="text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] focus:outline-none cursor-pointer inline-flex items-center justify-center normal-case"
+					aria-label="How to read P/Tangible-B"
+					data-info-key="tangiblebook"
+					onclick="toggleExplanation('tangiblebook')"
+				>
+					<iconify-icon icon="mdi:information-outline" class="text-base text-[color:var(--accent)]"></iconify-icon>
+				</button>
+			</p>
+			<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+				<RatioTile
+					label="P/B"
+					value={num(book.priceToBook)}
+					source={`equity ${formatNumber(book.equity)} · ${book.period}`}
+					signalKind="pb"
+				/>
+				<RatioTile
+					label="P/Tangible-B"
+					value={num(book.priceToTangibleBook)}
+					source={book.goodwill !== null ? `excl. ${formatNumber(book.goodwill)} goodwill` : "excl. intangible assets"}
+					footnote={book.adjustedPriceToTangibleBook !== null ? `adj. ${book.adjustedPriceToTangibleBook.toFixed(2)} with one-offs added back` : null}
+					signalKind="pb"
+				/>
+				<RatioTile
+					label="Book Value / Share"
+					value={formatNumber(book.bookPerShare, 2)}
+					source={book.sharesSource === "market-cap" ? "shares from market cap" : "shares from filing"}
+					signalKind="none"
+				/>
+				<RatioTile
+					label="Tangible B/V per Share"
+					value={formatNumber(book.tangibleBookPerShare, 2)}
+					source={`tangible equity ${formatNumber(book.tangibleEquity)}`}
+					signalKind="none"
+				/>
+			</div>
+			{book.note && <p class="mt-3 text-xs text-[color:var(--warning)] italic">⚠ {book.note}</p>}
+			{book.bookImpactCount > 0 && (
+				<p class="mt-3 text-xs text-[color:var(--paper-muted)] italic">
+					{book.bookImpactCount} one-off {book.bookImpactCount === 1 ? "item lands" : "items land"} on tangible book, so the adjusted
+					figure above is book value with {book.bookImpactCount === 1 ? "it" : "them"} added back. Goodwill write-offs are excluded
+					from that adjustment on purpose: they shrink equity and goodwill together, so tangible book doesn't move.
+				</p>
+			)}
+		</div>
+	)}
+
+	{!hasItems && <p class="text-sm text-[color:var(--paper-dim)]">{audit.summary}</p>}
+
+	{audit.summary && hasItems && (
 		<p class="mt-4 text-xs text-[color:var(--paper-muted)] italic">{audit.summary}</p>
 	)}
 </div>

@@ -21,33 +21,16 @@ export const formatPercent = (n: number | null): string => {
 // Ratio-specific color coding — thresholds based on common valuation rules of thumb.
 // Returns an object with text color, background badge color, a human label,
 // and a 0–100 position for a gradient bar indicator.
+//
+// Only RATIOS get a signal. A raw value (EPS, book value per share) has no
+// cheap/expensive zone, so those tiles render with `signalKind="none"` in
+// RatioTile instead of a fabricated verdict.
 export type RatioSignal = {
   textClass: string;
   badgeClass: string;
-  label: string; // "Low" | "Reasonable" | "High" | "Attractive" | "Fair" | "Expensive" | "Loss" | "N/A"
+  label: string; // "Low" | "Reasonable" | "High" | "Attractive" | "Fair" | "Expensive" | "N/A"
   barPosition: number; // 0–100, where on the gradient bar the value sits
   barColor: "green" | "yellow" | "red" | "gray"; // which color segment of the gradient
-  inverted?: boolean; // when true, higher values are green/good and lower are red/bad (e.g. EPS)
-};
-
-export const epsSignal = (v: number | null): RatioSignal => {
-  if (v === null) return { textClass: "text-[color:var(--paper-muted)]", badgeClass: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]", label: "N/A", barPosition: 50, barColor: "gray", inverted: true };
-  if (v < 0) {
-    // Loss: 0 to 25% of the bar (red zone at bottom)
-    const barPosition = Math.max(5, Math.round(25 - Math.min(20, Math.abs(v))));
-    return { textClass: "text-red-400", badgeClass: "bg-red-400/20 text-red-400", label: "Loss", barPosition, barColor: "red", inverted: true };
-  }
-  if (v === 0) {
-    return { textClass: "text-yellow-300", badgeClass: "bg-yellow-300/20 text-yellow-300", label: "Flat", barPosition: 30, barColor: "yellow", inverted: true };
-  }
-  if (v < 2) {
-    // Low positive: 30 to 60%
-    const barPosition = Math.round(30 + (v / 2) * 30);
-    return { textClass: "text-yellow-300", badgeClass: "bg-yellow-300/20 text-yellow-300", label: "Low", barPosition, barColor: "yellow", inverted: true };
-  }
-  // Healthy / strong profit: 60 to 100%
-  const barPosition = Math.min(100, Math.round(60 + Math.min(40, ((v - 2) / 8) * 40)));
-  return { textClass: "text-green-400", badgeClass: "bg-green-400/20 text-green-400", label: "Profitable", barPosition, barColor: "green", inverted: true };
 };
 
 export const peSignal = (v: number | null): RatioSignal => {

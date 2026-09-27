@@ -295,6 +295,61 @@ export async function fetchXbrlSegmentRows(
   return rows;
 }
 
+// ---- XBRL fact index (shared by the one-off audit + balance-sheet pickers) ----
+
+// Filers tag the same concept many times over: several instants (current period
+// plus prior-year comparatives) and dimensional (segment) restatements of the
+// same number. Every picker below wants the NEWEST instant of the
+// CONSOLIDATED (no-`<segment>`) view, so that parse lives here exactly once.
+//
+// Units: values in the instance document are RAW dollars — the R*.htm reports
+// show millions, the XML does not. Never scale what comes out of here.
+export type FactIndex = {
+  latest: Map<string, { value: number; period: string }>;
+  periodEnd: string; // newest non-dimensional instant date
+};
+
+export function indexNonDimensionalFacts(xml: string): FactIndex {
+  const instantByCtx = new Map<string, string>();
+  const dimCtx = new Set<string>();
+  const ctxRe = /<context\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/context>/g;
+  let c: RegExpExecArray | null;
+  while ((c = ctxRe.exec(xml))) {
+    const id = c[1];
+    const body = c[2];
+    if (/<segment\b/i.test(body)) dimCtx.add(id);
+    const instant = /<instant>([^<]+)<\/instant>/.exec(body);
+    if (instant) instantByCtx.set(id, instant[1]);
+  }
+
+  // Attribute names are case-sensitive in XML but filings vary; match
+  // `contextRef`/`contextref` with an /i flag. The closing-tag backreference and
+  // `[\w.-]+` prefix class mirror parseXbrlNumericFacts (a `[A-Za-z0-9_]+`
+  // prefix class drops every us-gaap fact).
+  const factRe = /<([\w.-]+):([\w.-]+)\b[^>]*\bcontextref="([^"]+)"[^>]*>(-?[0-9]+(?:\.[0-9]+)?)<\/\1:\2>/gi;
+  const latest = new Map<string, { value: number; period: string }>();
+  let m: RegExpExecArray | null;
+  while ((m = factRe.exec(xml))) {
+    const tag = m[2];
+    const value = Number(m[4]);
+    const contextRef = m[3];
+    if (!Number.isFinite(value)) continue;
+    if (dimCtx.has(contextRef)) continue; // segment-level restatement — ignore
+    const period = instantByCtx.get(contextRef) ?? "";
+    const existing = latest.get(tag);
+    if (!existing || period > existing.period) latest.set(tag, { value, period });
+  }
+
+  const periodEnd =
+    [...instantByCtx.entries()]
+      .filter(([id]) => !dimCtx.has(id))
+      .map(([, date]) => date)
+      .sort()
+      .pop() ?? "";
+
+  return { latest, periodEnd };
+}
+
 // ---- One-off / unusual items (earnings audit) ----
 
 // Tag names whose names alone suggest a non-recurring item. The LLM decides
@@ -308,44 +363,124 @@ export async function fetchXbrlSegmentRows(
 export const ONE_OFF_TAG_RE =
   /restructuring|impair|write.?down|writedown|goodwill.?impair|discontinu|litigation|settlement|severance|exit|disposal|unusual|nonrecurring|non.?recurring|casualty|environmental/i;
 
-// Latest-period consolidated (no dimension) facts matching the filter.
-// Returns raw rows for the audit pipeline — nothing computed here.
-export async function fetchXbrlOneOffFacts(
-  filing: LatestFiling,
-  trace?: Trace,
-): Promise<{ period: string; rows: { label: string; value: number }[] } | null> {
-  const xml = await fetchInstanceXml(filing, trace, "edgar: audit");
-  if (!xml) return null;
-
+// Latest-period consolidated (no dimension) facts matching the filter, as raw
+// rows for the audit pipeline — nothing computed here. Pure: takes the instance
+// XML, so tests can drive it without the network.
+//
+// NOTE: the period filter must use the FILING's reportDate (periodEnd) — and
+// only when the context actually carries an endDate. An earlier version read a
+// field that doesn't exist, so the filter never fired and prior-year
+// comparative facts leaked into every audit (silent, plausible-looking, wrong).
+export function pickOneOffFacts(
+  xml: string,
+  periodEnd: string,
+): { period: string; rows: { label: string; value: number }[] } | null {
   const ctxs = parseXbrlContexts(xml);
   const facts = parseXbrlNumericFacts(xml, ONE_OFF_TAG_RE);
-  trace?.log("edgar: audit — one-off tag matches", { facts: facts.length });
 
   // Keep only consolidated facts (no segment member) in the latest period.
-  // Dimensional contexts here are segment-level restatements of the
-  // same item — the audit cares about the company-wide impact.
-  // NOTE: must be `periodEnd` (the reportDate of the chosen filing) — the old
-  // `filing.fyEnd` read a field that doesn't exist, so the filter never
-  // fired and prior-year comparative facts leaked into every audit.
-  const fyEnd = filing.periodEnd;
+  // Dimensional contexts here are segment-level restatements of the same item —
+  // the audit cares about the company-wide impact.
   const byLabel = new Map<string, { value: number; period: string }>();
   for (const f of facts) {
     const ctx = ctxs.get(f.contextRef);
     if (!ctx || ctx.members.length > 0) continue;
-    if (fyEnd && ctx.endDate && ctx.endDate !== fyEnd) continue;
+    if (periodEnd && ctx.endDate && ctx.endDate !== periodEnd) continue;
     if (f.value === 0) continue; // zero-value facts carry no information ("impairment of $0")
     const existing = byLabel.get(f.tag);
     if (!existing || Math.abs(f.value) > Math.abs(existing.value)) {
-      byLabel.set(f.tag, { value: f.value, period: ctx.endDate || fyEnd });
+      byLabel.set(f.tag, { value: f.value, period: ctx.endDate || periodEnd });
     }
   }
-  if (byLabel.size === 0) {
-    trace?.log("edgar: audit — no consolidated facts in period", { period: fyEnd });
-    return null;
-  }
+  if (byLabel.size === 0) return null;
 
   const rows = [...byLabel.entries()].map(([label, v]) => ({ label, value: v.value }));
-  return { period: fyEnd || [...byLabel.values()][0].period, rows };
+  return { period: periodEnd || [...byLabel.values()][0].period, rows };
+}
+
+// ---- Balance-sheet facts for book value (P/B, P/Tangible-B) ----
+
+export type BookValueFacts = {
+  equity: number | null;
+  goodwill: number | null;
+  intangiblesExclGoodwill: number | null; // combined balance-sheet tag (preferred)
+  intangiblesFromNotes: number | null; // finite-lived (+ indefinite-lived) note tags
+  intangiblesInclGoodwill: number | null; // last resort — already contains goodwill
+  sharesOutstanding: number | null;
+  /** Instant of the EQUITY line (the balance-sheet date), not the newest instant
+   *  in the document — cover-page share counts carry a later date than the
+   *  balance sheet, and showing that date next to equity is just wrong. */
+  periodEnd: string;
+};
+
+// Deterministic tag lookup over the instance XML: no LLM, no network.
+//
+// Intangibles need three tries: plenty of filers (Microsoft) never tag the
+// combined `IntangibleAssetsNetExcludingGoodwill` and put the balance-sheet line
+// under the finite-lived note instead, while others tag only the
+// including-goodwill figure.
+export function pickBookValueFacts(xml: string): BookValueFacts {
+  const { latest, periodEnd: newestInstant } = indexNonDimensionalFacts(xml);
+  const hit = (tag: string) => latest.get(tag) ?? null;
+  const value = (tags: string[]): number | null => {
+    for (const t of tags) {
+      const found = latest.get(t);
+      if (found) return found.value;
+    }
+    return null;
+  };
+
+  // Parent-only equity is the right basis for book value PER SHARE (minority
+  // interest belongs to someone else); the including-NCI tag is the fallback.
+  const equityTags = [
+    "StockholdersEquity",
+    "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+  ];
+  const equityHit = equityTags.map((t) => hit(t)).find((h) => h !== null) ?? null;
+
+  const finiteLived = value(["FiniteLivedIntangibleAssetsNet"]);
+  const indefiniteLived = value(["IndefiniteLivedIntangibleAssetsExcludingGoodwill"]);
+
+  return {
+    equity: equityHit?.value ?? null,
+    goodwill: value(["Goodwill"]),
+    intangiblesExclGoodwill: value(["IntangibleAssetsNetExcludingGoodwill"]),
+    intangiblesFromNotes:
+      finiteLived === null && indefiniteLived === null
+        ? null
+        : (finiteLived ?? 0) + (indefiniteLived ?? 0),
+    intangiblesInclGoodwill: value(["IntangibleAssetsNetIncludingGoodwill"]),
+    sharesOutstanding: value(["EntityCommonStockSharesOutstanding"]),
+    periodEnd: equityHit?.period || newestInstant,
+  };
+}
+
+export type AuditFacts = {
+  oneOff: { period: string; rows: { label: string; value: number }[] } | null;
+  book: BookValueFacts | null;
+};
+
+// One instance-XML fetch feeds BOTH the one-off audit and the book-value panel
+// — the instance is multi-MB, and a second fetch for the same document would
+// double EDGAR traffic (and the SEC rate limit) for no reason.
+export async function fetchAuditFacts(filing: LatestFiling, trace?: Trace): Promise<AuditFacts | null> {
+  const xml = await fetchInstanceXml(filing, trace, "edgar: audit");
+  if (!xml) return null;
+
+  const oneOff = pickOneOffFacts(xml, filing.periodEnd);
+  const book = pickBookValueFacts(xml);
+  trace?.log("edgar: audit — instance parsed", {
+    oneOffRows: oneOff?.rows.length ?? 0,
+    period: oneOff?.period ?? filing.periodEnd,
+    equity: book.equity,
+    goodwill: book.goodwill,
+    intangibles: book.intangiblesExclGoodwill ?? book.intangiblesFromNotes ?? book.intangiblesInclGoodwill,
+    bookPeriod: book.periodEnd,
+  });
+  if (!oneOff) {
+    trace?.log("edgar: audit — no consolidated one-off facts in period", { period: filing.periodEnd });
+  }
+  return { oneOff, book };
 }
 
 // ---- Balance-sheet facts (SOTP equity bridge prefill) ----
@@ -366,36 +501,9 @@ export type BridgeFacts = {
 // Values in the instance document are RAW dollars (the R-file HTML is in
 // millions but the XML is not) — this reads the XML, so units are consistent.
 export function pickBalanceSheetFacts(xml: string): BridgeFacts {
-  // 1. Contexts: instant date + dimensional flag (<segment> child present).
-  const instantByCtx = new Map<string, string>();
-  const dimCtx = new Set<string>();
-  const ctxRe = /<context\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/context>/g;
-  let c: RegExpExecArray | null;
-  while ((c = ctxRe.exec(xml))) {
-    const id = c[1];
-    const body = c[2];
-    if (/<segment\b/i.test(body)) dimCtx.add(id);
-    const instant = /<instant>([^<]+)<\/instant>/.exec(body);
-    if (instant) instantByCtx.set(id, instant[1]);
-  }
-
-  // 2. Numeric facts. Attribute names are case-sensitive in XML but filings
-  //    vary; match `contextRef`/`contextref` with an /i flag. The closing-tag
-  //    backreference and `[\w.-]+` prefix class mirror parseXbrlNumericFacts
-  //    (a `[A-Za-z0-9_]+` prefix drops every us-gaap fact).
-  const factRe = /<([\w.-]+):([\w.-]+)\b[^>]*\bcontextref="([^"]+)"[^>]*>(-?[0-9]+(?:\.[0-9]+)?)<\/\1:\2>/gi;
-  const latestByTag = new Map<string, { value: number; period: string }>();
-  let m: RegExpExecArray | null;
-  while ((m = factRe.exec(xml))) {
-    const tag = m[2];
-    const value = Number(m[4]);
-    const contextRef = m[3];
-    if (!Number.isFinite(value)) continue;
-    if (dimCtx.has(contextRef)) continue; // segment-level restatement — ignore
-    const period = instantByCtx.get(contextRef) ?? "";
-    const existing = latestByTag.get(tag);
-    if (!existing || period > existing.period) latestByTag.set(tag, { value, period });
-  }
+  // Same newest-non-dimensional-fact-per-tag index the one-off and book-value
+  // pickers use (see indexNonDimensionalFacts).
+  const { latest: latestByTag, periodEnd } = indexNonDimensionalFacts(xml);
 
   const value = (tagNames: string[]): number | null => {
     for (const t of tagNames) {
@@ -417,13 +525,6 @@ export function pickBalanceSheetFacts(xml: string): BridgeFacts {
   const minorityInterest = value(["MinorityInterest", "MinoritiesInterest"]);
   const redeemablePreferred = value(["RedeemableConvertiblePreferredStockValue"]);
   const sharesOutstanding = value(["EntityCommonStockSharesOutstanding"]);
-
-  // Newest balance-sheet date across the non-dimensional contexts.
-  const periodEnd = [...instantByCtx.entries()]
-    .filter(([id]) => !dimCtx.has(id))
-    .map(([, date]) => date)
-    .sort()
-    .pop() ?? "";
 
   return {
     cash,

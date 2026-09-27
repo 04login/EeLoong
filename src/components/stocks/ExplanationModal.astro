@@ -20,7 +20,7 @@ const explanations = [
       rows: [
         ["P/E (Price-to-Earnings)", "< 12–15", "15 – 25", "> 25–30+", "Historical S&P 500 average ~18–22. High P/E is typical for tech/growth companies; low P/E is common for mature banks, energy, and utilities."],
         ["PEG (P/E ÷ Growth Rate)", "< 1.0", "1.0 – 1.5", "> 2.0", "Adjusts P/E for earnings growth. PEG < 1 suggests undervaluation relative to growth; > 2 suggests overvaluation. Only meaningful with positive growth."],
-        ["P/B (Price-to-Book)", "< 1.0", "1.0 – 3.0", "> 3.0–5.0+", "Compares price to net assets (book value). < 1 = buying under liquidation value (common in financials). Asset-light tech is often > 10."],
+        ["P/B (Price-to-Book)", "< 1.0", "1.0 – 3.0", "> 3.0–5.0+", "Compares price to net assets (book value). < 1 = buying under liquidation value (common in financials). Asset-light tech is often > 10. See <strong>P/Tangible-B</strong> in the Earnings Audit panel for the version that strips goodwill."],
         ["P/S (Price-to-Sales)", "< 1–2", "2 – 4", "> 6–10+", "Useful for high-growth or software companies with fluctuating margins. Low P/S = cheap revenue; high P/S = paying a premium for growth."],
       ],
     },
@@ -41,11 +41,34 @@ const explanations = [
     title: "Earnings Audit",
     icon: "mdi:file-document-edit",
     bullets: [
-      "Compares <strong>reported EPS</strong> (official GAAP earnings) with <strong>adjusted EPS</strong> (underlying profit after stripping out one-off, non-recurring items).",
-      "One-off items include things like goodwill impairments, restructuring costs, legal settlements, or asset sale gains/losses that don't reflect normal operating performance.",
-      "We scan SEC filings for unusual accounting items, verify whether they are truly non-recurring, and classify them as CHARGE (hurt reported earnings) or GAIN (boosted reported earnings).",
-      "Adjusted EPS = Reported EPS − (Total one-offs ÷ Shares). If no material one-offs were found in the period, the panel reports that cleanly.",
+      "Strips out <strong>one-off, non-recurring items</strong> to show what the business would have earned without them. Reported EPS, P/E and PEG are already in the Valuation Ratios card at the top — this panel shows only the <strong>adjusted</strong> versions, with the reported figure as a small note beneath each one.",
+      "One-off items include goodwill impairments, restructuring costs, legal settlements, discontinued operations, or asset sale gains/losses that don't reflect normal operating performance.",
+      "We scan the filing's XBRL data for unusual accounting items, then a model decides which are genuinely non-recurring and classifies each as CHARGE (hurt reported earnings) or GAIN (boosted them). The model may only <em>relabel</em> numbers that were already in the filing — it can never invent or recompute one.",
+      "Each item is also tagged with <strong>where it lands</strong>: EPS (in reported earnings), BOOK (touches hard assets, written-down inventory or PP&amp;E), GOODWILL (writes off goodwill — see below), CASH (real money moved), REVENUE (reported sales include it). Only EPS items move the adjusted EPS, and only BOOK items move adjusted tangible book.",
+      "Adjusted EPS = Reported EPS − (net one-off effect ÷ shares). If nothing material was found, the panel says so plainly.",
+      "⚠ <strong>Read the sanity warning when it appears.</strong> If the one-offs add up to more than the company's entire trailing profit, the panel flags the adjusted ratios as not meaningful: the filing's items and the trailing EPS usually cover different periods, part of the item may already be excluded from reported EPS, or the same event arrived under two tags. A reported P/E of 20 collapsing to an &ldquo;adjusted&rdquo; 4.5 is that artifact, not a bargain.",
     ],
+  },
+  {
+    key: "tangiblebook",
+    title: "P/Tangible-B (Tangible Book Value)",
+    icon: "mdi:bank-outline",
+    bullets: [
+      "<strong>What it is:</strong> the price you pay for each dollar of a company's <em>hard</em> net assets. Tangible book = total equity − goodwill − acquired intangibles. Reported book value includes those two lines; tangible book removes them.",
+      "<strong>Why it matters:</strong> on any acquisitive company, reported book is mostly goodwill and intangibles — the assets bought in past deals, which are exactly the ones written off first when the business underperforms. Tangible book is the part of the balance sheet that is physically there.",
+      "<strong>The one thing to know:</strong> a goodwill write-off cuts equity and goodwill by the same amount, so P/B <em>jumps</em> while P/Tangible-B doesn't move at all. A big gap between the two numbers is a measure of how much of the book is goodwill, not a signal that the stock got cheaper.",
+      "<strong>How to read it:</strong> below 1 = the market values the business under its tangible net assets (normal for banks, insurers and asset-heavy cyclicals). 1–3 is the ordinary range. Very high or negative = either an asset-light business (software, services — tangible book means little there) or accumulated losses have eaten the equity base.",
+      "<strong>Always compare like with like:</strong> compare P/Tangible-B against industry peers, never against a single all-market rule. Banks trade near 1× tangible book for structural reasons; a software firm at 20× isn't automatically expensive.",
+      "Two extra figures in the panel: <strong>Book Value/Share</strong> and <strong>Tangible B/V per Share</strong> are the per-share inputs behind the two ratios (equity ÷ shares), so you can see whether a low ratio comes from a big equity base or a low share price.",
+    ],
+    table: {
+      headers: ["Ratio", "Low (Green)", "Mid / Fair (Yellow)", "High (Red)", "Context & Practical Rules"],
+      rows: [
+        ["P/Tangible-B", "< 1.0", "1.0 – 3.0", "> 3.0", "Hard-asset multiple. < 1 = market values the business below its tangible net assets (typical of banks and asset-heavy cyclicals after stress). High readings are normal for asset-light businesses, where tangible book barely exists — use EV/EBITDA or P/E there instead."],
+        ["P/B (includes goodwill)", "< 1.0", "1.0 – 3.0", "> 3.0–5.0+", "The reported multiple. A wide gap to P/Tangible-B means much of the book is goodwill and intangibles that a future impairment could erase."],
+        ["Equity / Assets (context)", "< 0.25", "0.25 – 0.5", "> 0.5", "How much of the balance sheet is funded by shareholders rather than debt. A high P/Tangible-B on a thin equity base is leveraged in both directions."],
+      ],
+    },
   },
   {
     key: "peers",

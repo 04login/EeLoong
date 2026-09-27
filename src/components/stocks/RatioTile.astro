@@ -1,83 +1,112 @@
 ---
-// Valuation ratio tile (P/E, P/S, PEG, P/B, EPS) for the stock result page.
-import { peSignal, psSignal, pbSignal, pegSignal, epsSignal, type RatioSignal } from "../../lib/stock-research/format.ts";
+// Valuation ratio tile (P/E, P/S, PEG, P/B, P/Tangible-B) for the stock result
+// page, plus a value mode for metrics that are NOT ratios.
+//
+// signalKind:
+//   "auto" (default) — pick the signal from the label text
+//   "pe" | "ps" | "pb" | "peg" — force a specific signal (label-text sniffing is
+//        fragile for names like "P/Tangible-B")
+//   "none" — render a plain value tile: no gradient bar, no zone verdict.
+//        Used for EPS and per-share book values: "PROFITABLE"/"CHEAP" on a raw
+//        dollar figure is not a valuation read, so we don't render one.
+import { peSignal, psSignal, pbSignal, pegSignal, type RatioSignal } from "../../lib/stock-research/format.ts";
+
+type SignalKind = "auto" | "pe" | "ps" | "pb" | "peg" | "none";
+
 interface Props {
 	label: string;
 	value: string;
 	source?: string | null;
+	/** Small muted line under the value — reported figure, caveat, provenance. */
+	footnote?: string | null;
 	colorClass?: string;
+	signalKind?: SignalKind;
 }
-const { label, value, source = null, colorClass = "" } = Astro.props;
+const { label, value, source = null, footnote = null, colorClass = "", signalKind = "auto" } = Astro.props;
 
-// Determine which signal function to use based on the label
-function getSignal(label: string, valueStr: string): RatioSignal {
+// Determine which signal function to use based on the label (or the explicit prop)
+function getSignal(kind: SignalKind, label: string, valueStr: string): RatioSignal {
 	const val = parseFloat(valueStr);
 	const num = isNaN(val) ? null : val;
 	const l = label.toLowerCase();
-	if (/\beps\b/i.test(l)) return epsSignal(num);
-	if (/\bp\/?e\b/i.test(l)) return peSignal(num);
-	if (/\bp\/?s\b/i.test(l)) return psSignal(num);
-	if (/\bp\/?b\b/i.test(l)) return pbSignal(num);
-	if (/\bpeg\b/i.test(l)) return pegSignal(num);
-	// fallback to generic
-	return { textClass: colorClass || "text-[color:var(--paper)]", badgeClass: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]", label: "—", barPosition: 50, barColor: "gray" };
+	const resolved: Exclude<SignalKind, "none"> =
+		kind !== "auto"
+			? kind
+			: /\bp\/?e\b/i.test(l)
+				? "pe"
+				: /\bp\/?s\b/i.test(l)
+					? "ps"
+					: /\bp\/?b\b/i.test(l)
+						? "pb"
+						: /\bpeg\b/i.test(l)
+							? "peg"
+							: "pe";
+	if (resolved === "pe") return peSignal(num);
+	if (resolved === "ps") return psSignal(num);
+	if (resolved === "pb") return pbSignal(num);
+	return pegSignal(num);
 }
 
-const signal = getSignal(label, value);
+const showSignal = signalKind !== "none";
+const signal = showSignal ? getSignal(signalKind, label, value) : null;
 
-const isNA = signal.barColor === "gray";
-// Full-spectrum gradient:
-// For valuation ratios (P/E, P/S, PEG, P/B): Low is cheap/good (green at bottom), High is expensive (red at top).
-// For inverted metrics (EPS): Low/negative is bad (red at bottom), High is profitable/good (green at top).
+const isNA = !signal || signal.barColor === "gray";
+// Low is cheap (green at the bottom), high is expensive (red at the top).
 const barStyle = isNA
 	? "background: linear-gradient(to top, var(--ink-700), var(--ink-500));"
-	: signal.inverted
-		? "background: linear-gradient(to top, var(--accent), var(--warning), var(--success));"
-		: "background: linear-gradient(to top, var(--success), var(--warning), var(--accent));";
+	: "background: linear-gradient(to top, var(--success), var(--warning), var(--accent));";
 
 // Zone label for the pointer tag (left of bar)
-const pointerLabel = signal.label && signal.label !== "—"
-	? signal.label.toUpperCase()
-	: signal.barColor === "green"
-		? "LOW"
-		: signal.barColor === "yellow"
-			? "FAIR"
-			: signal.barColor === "red"
-				? "HIGH"
-				: "N/A";
+const pointerLabel = signal
+	? signal.label && signal.label !== "—"
+		? signal.label.toUpperCase()
+		: signal.barColor === "green"
+			? "LOW"
+			: signal.barColor === "yellow"
+				? "FAIR"
+				: signal.barColor === "red"
+					? "HIGH"
+					: "N/A"
+	: "";
+
 const pointerColors: Record<string, string> = {
 	green: "bg-[color:var(--success)] text-white",
 	yellow: "bg-[color:var(--warning)] text-[color:var(--ink-900)]",
 	red: "bg-[color:var(--accent)] text-white",
 	gray: "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]",
 };
-const pointerBg = pointerColors[signal.barColor] || "bg-[color:var(--ink-700)] text-[color:var(--paper-dim)]";
-const valueColorClass = colorClass || signal.textClass;
+const pointerBg = signal ? pointerColors[signal.barColor] || pointerColors.gray : pointerColors.gray;
+const valueColorClass = colorClass || signal?.textClass || "text-[color:var(--paper)]";
 ---
 
-<div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-4">
-	<div class="flex items-center justify-between gap-4">
+<div class="bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-lg p-4 h-full">
+	<div class="flex items-center justify-between gap-4 h-full">
 		<!-- Left: Ratio label and value -->
 		<div class="flex-1 min-w-0">
 			<p class="text-xs text-[color:var(--paper-dim)] uppercase tracking-wider mb-1">{label}</p>
 			<p class={`text-2xl font-bold ${valueColorClass} truncate`}>{value}</p>
 			{source && <p class="text-[10px] text-[color:var(--paper-muted)] mt-1 font-mono">{source}</p>}
+			{footnote && <p class="text-[10px] text-[color:var(--paper-dim)] mt-1">{footnote}</p>}
 		</div>
 
-		<!-- Right: Vertical gradient bar with pointer tag on its LEFT -->
-		<div class="flex items-center justify-center flex-shrink-0">
-			<div class="relative flex items-center">
-				<!-- Pointer tag on the LEFT of the bar -->
-				<div class={`absolute right-full mr-2 ${pointerBg} px-2 py-1 rounded text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap shadow-lg`} style={`bottom: ${signal.barPosition}%; transform: translateY(50%);`}>
-					{pointerLabel}
-				</div>
+		{signal && (
+			<>
+				{/* Right: vertical gradient bar with a pointer tag on its left */}
+				<div class="flex items-center justify-center flex-shrink-0">
+					<div class="relative flex items-center">
+						{/* Pointer tag (zone verdict) to the left of the bar */}
+						<div class={`absolute right-full mr-2 ${pointerBg} px-2 py-1 rounded text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap shadow-lg`} style={`bottom: ${signal.barPosition}%; transform: translateY(50%);`}>
+							{pointerLabel}
+						</div>
 
-				<!-- Vertical gradient bar -->
-				<div class="w-2.5 h-32 rounded-full overflow-hidden relative flex-shrink-0" style={barStyle}>
-					<!-- White marker line on the bar -->
-					<div class="absolute left-0 right-0 h-0.5 bg-white/90 shadow-[0_0_4px_rgba(0,0,0,0.6)]" style={`bottom: ${signal.barPosition}%;`}></div>
+						{/* Vertical gradient bar */}
+						<div class="w-2.5 h-32 rounded-full overflow-hidden relative flex-shrink-0" style={barStyle}>
+							{/* White marker line showing where the value sits */}
+							<div class="absolute left-0 right-0 h-0.5 bg-white/90 shadow-[0_0_4px_rgba(0,0,0,0.6)]" style={`bottom: ${signal.barPosition}%;`}></div>
+						</div>
+					</div>
 				</div>
-			</div>
-		</div>
+			</>
+		)}
 	</div>
 </div>
