@@ -55,7 +55,7 @@ if (db) {
     // 1. Fetch available searches for the dropdown filter
     const searchesResult = await db.prepare("SELECT search_id, name FROM monitored_searches ORDER BY name ASC").all();
     if (searchesResult.results) {
-        searches = searchesResult.results;
+        searches = searchesResult.results as Search[];
     }
 
 	// 2. Build the query dynamically based on filters
@@ -143,7 +143,7 @@ if (db) {
 
 	const result = await statement.all();
 	if (result.results) {
-		deals = result.results;
+		deals = result.results as Deal[];
 	}
 }
 

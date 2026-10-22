@@ -1,5 +1,5 @@
-type D1Database = import('@cloudflare/workers-types/2023-03-03').D1Database;
-type KVNamespace = import('@cloudflare/workers-types/2023-03-03').KVNamespace;
+type D1Database = import('@cloudflare/workers-types').D1Database;
+type KVNamespace = import('@cloudflare/workers-types').KVNamespace;
 
 type Env = {
 	DB: D1Database;

@@ -81,7 +81,8 @@ export async function searchTickers(q: string): Promise<SearchHit[]> {
   if (!res.ok) throw new Error(`Yahoo search failed with ${res.status}`);
 
   const json = (await res.json()) as { quotes?: unknown };
-  const hits = (json.quotes ?? []).filter(isEquityHit);
+  const quotes = Array.isArray(json.quotes) ? json.quotes : [];
+  const hits = quotes.filter(isEquityHit);
   // The `quotes` array can include near-duplicate listings for the same company
   // (e.g. AAPL + AAPL19.BK). Prefer the plain ticker, exchange closest to home.
   const plain = hits.filter((h) => /^[A-Z.]+$/.test(h.symbol));
@@ -140,11 +141,11 @@ async function quoteSummary(symbol: string, modules: string[]): Promise<Record<s
     );
     if (!retryRes.ok) throw new Error(`Yahoo quoteSummary failed with ${retryRes.status}`);
     const j2 = (await retryRes.json()) as { quoteSummary?: { result?: unknown[] | null } };
-    return j2.quoteSummary?.result?.[0] ?? null;
+    return (j2.quoteSummary?.result?.[0] as Record<string, unknown> | undefined) ?? null;
   }
   if (!res.ok) throw new Error(`Yahoo quoteSummary failed with ${res.status}`);
   const json = (await res.json()) as { quoteSummary?: { result?: unknown[] | null } };
-  return json.quoteSummary?.result?.[0] ?? null;
+  return (json.quoteSummary?.result?.[0] as Record<string, unknown> | undefined) ?? null;
 }
 
 // ------- Public data fetch (chart + quoteSummary merged) -------
@@ -197,7 +198,7 @@ export async function fetchQuote(symbol: string): Promise<TickerQuote | null> {
     market: detectMarket(symbol),
     currency,
 
-    price: parseNum(meta.regularMarketPrice) ?? parseNum(price.regularMarketPrice),
+    price: parseNum(meta.regularMarketPrice) ?? parseNum(price.regularMarketPrice) ?? 0,
     previousClose: parseNum(meta.chartPreviousClose),
     change: parseNum(meta.regularMarketChange) ?? parseNum(price.regularMarketChange),
     changePercent:

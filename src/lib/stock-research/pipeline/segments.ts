@@ -19,7 +19,7 @@
 // date — a different window than the 10-K's full year. The period is shown on
 // the panel, so the slice is honest about what it covers.
 
-import type { KVNamespace } from "@cloudflare/workers-types/2023-03-03";
+import type { KVNamespace } from "@cloudflare/workers-types";
 import { CACHE_TTL } from "../config.ts";
 import { kvGet, kvPut } from "../cache/kv.ts";
 import { tickerToCik } from "../sources/cik-map.ts";

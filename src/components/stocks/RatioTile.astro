@@ -29,8 +29,8 @@ function getSignal(kind: SignalKind, label: string, valueStr: string): RatioSign
 	const val = parseFloat(valueStr);
 	const num = isNaN(val) ? null : val;
 	const l = label.toLowerCase();
-	const resolved: Exclude<SignalKind, "none"> =
-		kind !== "auto"
+	const resolved: Exclude<SignalKind, "auto" | "none"> =
+		kind !== "auto" && kind !== "none"
 			? kind
 			: /\bp\/?e\b/i.test(l)
 				? "pe"

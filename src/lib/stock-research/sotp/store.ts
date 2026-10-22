@@ -2,7 +2,7 @@
 // All access goes through cache/kv.ts so the shared `stock-research:` prefix
 // applies. kv is injected (never imported from cloudflare:workers) — portable.
 
-import type { KVNamespace } from "@cloudflare/workers-types/2023-03-03";
+import type { KVNamespace } from "@cloudflare/workers-types";
 import { kvGet, kvPut, kvDelete, kvList } from "../cache/kv.ts";
 import type { SotpModel } from "./model.ts";
 

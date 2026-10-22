@@ -137,7 +137,7 @@ test("seedPartsFromSegments prefers the reportable-segment axis and zero-valuati
     source: "llm",
     sourceSummary: null,
     fyEnd: "2025-06-27",
-  } as parameters<typeof seedPartsFromSegments>[0];
+  } as Parameters<typeof seedPartsFromSegments>[0];
   const parts = seedPartsFromSegments(segments);
   assert.equal(parts.length, 2);
   assert.equal(parts[0].label, "Hardware");
@@ -150,9 +150,9 @@ test("seedPartsFromSegments falls back to the first group and returns [] when em
   const segments = {
     ticker: "X", groups: [{ axisLabel: "As disclosed", rows: [{ label: "Only slice", revenue: 5e9 }] }],
     period: "2025-01-01", source: "html", sourceSummary: null, fyEnd: "2025-01-01",
-  } as parameters<typeof seedPartsFromSegments>[0];
+  } as Parameters<typeof seedPartsFromSegments>[0];
   assert.equal(seedPartsFromSegments(segments)[0].label, "Only slice");
-  const empty = { ticker: "X", groups: [], period: "p", source: "none", sourceSummary: null, fyEnd: "p" } as parameters<typeof seedPartsFromSegments>[0];
+  const empty = { ticker: "X", groups: [], period: "p", source: "none", sourceSummary: null, fyEnd: "p" } as Parameters<typeof seedPartsFromSegments>[0];
   assert.deepEqual(seedPartsFromSegments(empty), []);
 });
 
@@ -219,7 +219,7 @@ test("seedPartsFromSegments carries the raw segment revenue as revenueRef", () =
     ticker: "X",
     groups: [{ axisLabel: "By reportable segment", rows: [{ label: "Connectivity", revenue: 7.55e9 }] }],
     period: "2026-06-30", source: "llm", sourceSummary: null, fyEnd: "2026-06-30",
-  } as parameters<typeof seedPartsFromSegments>[0];
+  } as Parameters<typeof seedPartsFromSegments>[0];
   const parts = seedPartsFromSegments(segments);
   assert.equal(parts[0].revenueRef, 7.55e9);
   assert.equal(parts[0].mode, undefined);

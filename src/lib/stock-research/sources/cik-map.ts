@@ -10,7 +10,7 @@
 
 import { SEC_USER_AGENT, CACHE_TTL } from "../config.ts";
 import { kvGet, kvPut } from "../cache/kv.ts";
-import type { KVNamespace } from "@cloudflare/workers-types/2023-03-03";
+import type { KVNamespace } from "@cloudflare/workers-types";
 
 const TICKER_CIK_MAP_KEY = "ticker-cik-map";
 const COMPANY_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";

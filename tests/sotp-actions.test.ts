@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { KVNamespace } from "@cloudflare/workers-types/2023-03-03";
+import type { KVNamespace } from "@cloudflare/workers-types";
 import { mockKv } from "./mock-kv.ts";
 import { handleSotpAction, type SotpActionEnv } from "../src/lib/stock-research/sotp/actions.ts";
 import { getModel, putModel } from "../src/lib/stock-research/sotp/store.ts";

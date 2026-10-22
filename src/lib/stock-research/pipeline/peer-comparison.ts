@@ -11,8 +11,8 @@
 // peers were actually compared.
 
 import { fetchQuote } from "../sources/yahoo.ts";
-import { computeFundamentals, type Fundamentals } from "./fundamentals.ts";
-import type { TickerQuote } from "../types.ts";
+import { computeFundamentals } from "./fundamentals.ts";
+import type { Fundamentals, TickerQuote } from "../types.ts";
 
 export type PeerRow = {
   ticker: string;

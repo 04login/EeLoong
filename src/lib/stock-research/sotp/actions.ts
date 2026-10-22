@@ -3,7 +3,7 @@
 // redirect or error; the Astro endpoint is a thin shim. All dependencies
 // (now, ticker seeding) are injectable so this runs hermetically in Node tests.
 
-import type { KVNamespace } from "@cloudflare/workers-types/2023-03-03";
+import type { KVNamespace } from "@cloudflare/workers-types";
 import type { LlmEnv } from "../llm/client.ts";
 import { getSegments } from "../pipeline/segments.ts";
 import type { SegmentResult } from "../pipeline/segments.ts";

@@ -218,9 +218,9 @@ test("pegBasis: Yahoo's published PEG anchors both rows (INR case)", () => {
   // INR: Yahoo publishes pegRatio 0.13 but no earningsGrowth, so the old
   // P/E÷growth formula printed "—" in the audit while the card above showed
   // 0.13. The published figure now anchors both.
-  const basis = pegBasis(quote({ trailingPE: 4.3, pegRatio: 0.13, earningsGrowth: null }));
+  const basis = pegBasis(quote({ trailingPE: 4.3, pegRatio: 0.13, earningsGrowth: null })) as any;
   assert.equal(basis.reportedPeg, 0.13);
-  assert.equal(Math.round(basis.pegForPe(3.19) * 1000) / 1000, Math.round((3.19 * 0.13) / 4.3 * 1000) / 1000);
+  assert.equal(Math.round(basis!.pegForPe(3.19) * 1000) / 1000, Math.round((3.19 * 0.13) / 4.3 * 1000) / 1000);
   assert.equal(basis.pegForPe(null), null);
   assert.equal(basis.pegForPe(-1), null);
 });

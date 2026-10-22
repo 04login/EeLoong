@@ -90,7 +90,7 @@ test("sanitizeModel clamps bridge percents and drops non-finite", () => {
   const m = sanitizeModel(
     {
       slug: "x", companyName: "X", currency: "USD", sharesOutstanding: 10, parts: [],
-      bridge: { netDebt: Math.NaN, minorityInterests: 3, preferred: 0, sotpDiscountPct: 400, illiquidityPct: 20 },
+      bridge: { netDebt: Number.NaN, minorityInterests: 3, preferred: 0, sotpDiscountPct: 400, illiquidityPct: 20 },
       importedFrom: null,
     } as unknown as Parameters<typeof sanitizeModel>[0],
     "now",

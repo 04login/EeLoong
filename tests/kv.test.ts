@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { KVNamespace } from "@cloudflare/workers-types/2023-03-03"; // type-only: erased by Node
+import type { KVNamespace } from "@cloudflare/workers-types"; // type-only: erased by Node
 import { kvGet, kvPut, kvDelete, kvList } from "../src/lib/stock-research/cache/kv.ts";
 import { mockKv } from "./mock-kv.ts";
 

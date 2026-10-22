@@ -4,7 +4,7 @@
 // from `import { env } from "cloudflare:workers"` / Astro.props). Nothing in
 // the lib touches `locals.runtime` directly, so the module stays portable.
 
-import type { KVNamespace } from "@cloudflare/workers-types/2023-03-03";
+import type { KVNamespace } from "@cloudflare/workers-types";
 
 const prefix = (key: string) => `stock-research:${key}`;
 
