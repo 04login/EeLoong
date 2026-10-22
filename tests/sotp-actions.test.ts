@@ -8,7 +8,13 @@ import { sanitizeModel, type SotpModel, type SotpPart } from "../src/lib/stock-r
 import type { SegmentResult } from "../src/lib/stock-research/pipeline/segments.ts";
 
 const asKv = (m: ReturnType<typeof mockKv>) => m as unknown as KVNamespace;
-const env: SotpActionEnv = { OPENROUTER_API_KEY: "stub" };
+const TOKEN = "s3cret";
+const env: SotpActionEnv = { OPENROUTER_API_KEY: "stub", SOTP_WRITE_TOKEN: TOKEN };
+function authed(): FormData {
+  const fd = new globalThis.FormData();
+  fd.set("writeToken", TOKEN);
+  return fd;
+}
 const now = () => "2026-09-10T00:00:00Z";
 const noSeed = async () => null;
 const appleSeed = async (_e: unknown, _k: unknown, ticker: string) => ({
@@ -22,7 +28,7 @@ const appleSeed = async (_e: unknown, _k: unknown, ticker: string) => ({
 
 test("create builds a slugified model and redirects to the editor", async () => {
   const m = mockKv();
-  const fd = new FormData();
+  const fd = authed();
   fd.set("action", "create");
   fd.set("companyName", "SpaceX");
   fd.set("currency", "usd");
@@ -37,10 +43,10 @@ test("create builds a slugified model and redirects to the editor", async () => 
 
 test("create suffixes colliding slugs and seeds parts from a ticker", async () => {
   const m = mockKv();
-  const fd1 = new FormData();
+  const fd1 = authed();
   fd1.set("action", "create"); fd1.set("companyName", "SpaceX");
   await handleSotpAction(fd1, env, asKv(m), { now, seed: noSeed });
-  const fd2 = new FormData();
+  const fd2 = authed();
   fd2.set("action", "create"); fd2.set("companyName", "SpaceX");
   fd2.set("seedTicker", "aapl");
   const res2 = await handleSotpAction(fd2, env, asKv(m), { now, seed: appleSeed });
@@ -53,7 +59,7 @@ test("create suffixes colliding slugs and seeds parts from a ticker", async () =
 
 test("create with a failing seed still creates the model and flags ?import=failed", async () => {
   const m = mockKv();
-  const fd = new FormData();
+  const fd = authed();
   fd.set("action", "create"); fd.set("companyName", "SpaceX"); fd.set("seedTicker", "NOPE");
   const res = await handleSotpAction(fd, env, asKv(m), { now, seed: noSeed });
   assert.deepEqual(res, { status: 303, location: "/projects/valuation-lab/spacex?import=failed" });
@@ -62,18 +68,18 @@ test("create with a failing seed still creates the model and flags ?import=faile
 
 test("create without a company name is a 400", async () => {
   const m = mockKv();
-  const fd = new FormData();
+  const fd = authed();
   fd.set("action", "create");
   assert.deepEqual(await handleSotpAction(fd, env, asKv(m), { now, seed: noSeed }), { status: 400, error: "Company name is required." });
 });
 
 test("save persists form-edited parts and keeps provenance; 404 on unknown slug", async () => {
   const m = mockKv();
-  const create = new FormData();
+  const create = authed();
   create.set("action", "create"); create.set("companyName", "SpaceX"); create.set("seedTicker", "aapl");
   await handleSotpAction(create, env, asKv(m), { now, seed: appleSeed });
 
-  const save = new FormData();
+  const save = authed();
   save.set("action", "save");
   save.set("slug", "spacex");
   save.set("companyName", "SpaceX Corp");
@@ -91,42 +97,42 @@ test("save persists form-edited parts and keeps provenance; 404 on unknown slug"
   assert.equal(saved?.parts[0].valuation, 600000000000);
   assert.deepEqual(saved?.importedFrom, { ticker: "AAPL", period: "2025-06-27" });
 
-  const ghost = new FormData();
+  const ghost = authed();
   ghost.set("action", "save"); ghost.set("slug", "ghost"); ghost.set("companyName", "G");
   assert.equal((await handleSotpAction(ghost, env, asKv(m), { now, seed: noSeed })).status, 404);
 });
 
 test("delete removes the model; 404 when absent", async () => {
   const m = mockKv();
-  const create = new FormData();
+  const create = authed();
   create.set("action", "create"); create.set("companyName", "SpaceX");
   await handleSotpAction(create, env, asKv(m), { now, seed: noSeed });
-  const del = new FormData();
+  const del = authed();
   del.set("action", "delete"); del.set("slug", "spacex");
   assert.deepEqual(await handleSotpAction(del, env, asKv(m), { now, seed: noSeed }), { status: 303, location: "/projects/valuation-lab?deleted=1" });
   assert.equal(await getModel(asKv(m), "spacex"), null);
-  const again = new FormData();
+  const again = authed();
   again.set("action", "delete"); again.set("slug", "spacex");
   assert.equal((await handleSotpAction(again, env, asKv(m), { now, seed: noSeed })).status, 404);
 });
 
-test("write token: 403 without/with-wrong token when configured, passes when set", async () => {
+test("write token: 403 when missing, wrong, or secret unset; passes when set", async () => {
   const m = mockKv();
   const lockedEnv: SotpActionEnv = { OPENROUTER_API_KEY: "stub", SOTP_WRITE_TOKEN: "s3cret" };
-  const fd = new FormData();
+  const fd = new globalThis.FormData();
   fd.set("action", "create"); fd.set("companyName", "SpaceX");
   assert.equal((await handleSotpAction(fd, lockedEnv, asKv(m), { now, seed: noSeed })).status, 403);
   fd.set("writeToken", "wrong");
   assert.equal((await handleSotpAction(fd, lockedEnv, asKv(m), { now, seed: noSeed })).status, 403);
   fd.set("writeToken", "s3cret");
   assert.equal((await handleSotpAction(fd, lockedEnv, asKv(m), { now, seed: noSeed })).status, 303);
-  // token UNSET → open (local dev convenience)
-  assert.equal((await handleSotpAction(fd, env, asKv(m), { now, seed: noSeed })).status, 303);
+  const unset: SotpActionEnv = { OPENROUTER_API_KEY: "stub" };
+  assert.equal((await handleSotpAction(fd, unset, asKv(m), { now, seed: noSeed })).status, 403);
 });
 
 test("unknown or missing action is a 400", async () => {
   const m = mockKv();
-  const fd = new FormData();
+  const fd = authed();
   fd.set("action", "nuke");
   assert.equal((await handleSotpAction(fd, env, asKv(m), { now, seed: noSeed })).status, 400);
 });
@@ -141,15 +147,15 @@ const bridgeSeed = async () => ({
 
 test("prefill-bridge fills only empty fields and stamps provenance", async () => {
   const m = mockKv();
-  const create = new FormData();
+  const create = authed();
   create.set("action", "create"); create.set("companyName", "SpaceX"); create.set("seedTicker", "SPCX");
   await handleSotpAction(create, env, asKv(m), { now, seed: appleSeed });
   // bridge starts empty; shares unset
-  const save = new FormData();
+  const save = authed();
   save.set("action", "save"); save.set("slug", "spacex"); save.set("companyName", "SpaceX");
   save.set("preferred", "123"); // user already set this one
   await handleSotpAction(save, env, asKv(m), { now, seed: noSeed });
-  const pre = new FormData();
+  const pre = authed();
   pre.set("action", "prefill-bridge");
   pre.set("slug", "spacex");
   pre.set("bridgeTicker", "SPCX");
@@ -164,10 +170,10 @@ test("prefill-bridge fills only empty fields and stamps provenance", async () =>
 
 test("prefill-bridge with no retrievable data redirects ?prefilled=none and changes nothing", async () => {
   const m = mockKv();
-  const create = new FormData();
+  const create = authed();
   create.set("action", "create"); create.set("companyName", "SpaceX");
   await handleSotpAction(create, env, asKv(m), { now, seed: noSeed });
-  const pre = new FormData();
+  const pre = authed();
   pre.set("action", "prefill-bridge"); pre.set("slug", "spacex");
   const res = await handleSotpAction(pre, env, asKv(m), { now, seed: noSeed, prefill: async () => null });
   assert.deepEqual(res, { status: 303, location: "/projects/valuation-lab/spacex?prefilled=0" });
@@ -208,7 +214,7 @@ test("append-segments fills matched revenue refs, appends missing parts, and is 
       { label: "AI", revenue: 3.38e9 },
     ]);
 
-  const fd = new FormData();
+  const fd = authed();
   fd.set("action", "append-segments");
   fd.set("slug", "conn");
   fd.set("segTicker", "AAPL");
@@ -229,7 +235,7 @@ test("append-segments fills matched revenue refs, appends missing parts, and is 
   assert.equal(saved!.parts.length, 3);
 
   // Manual save between calls: user flips Connectivity to × revenue with ref 9e9.
-  const save = new FormData();
+  const save = authed();
   save.set("action", "save");
   save.set("slug", "conn");
   save.set("companyName", "Test Co");
@@ -252,7 +258,7 @@ test("append-segments fills matched revenue refs, appends missing parts, and is 
 
 test("append-segments 404s on an unknown slug", async () => {
   const m = mockKv();
-  const fd = new FormData();
+  const fd = authed();
   fd.set("action", "append-segments");
   fd.set("slug", "ghost");
   const res = await handleSotpAction(fd, env, asKv(m), { now, segmentSource: async () => segmentStub([]) });
@@ -264,7 +270,7 @@ test("append-segments with no segment data redirects ?segments=0 and changes not
   await seedModel(m, "conn", [{ label: "Connectivity", valuation: 0, note: "" }]);
   const before = await getModel(asKv(m), "conn");
 
-  const fd = new FormData();
+  const fd = authed();
   fd.set("action", "append-segments");
   fd.set("slug", "conn");
   fd.set("segTicker", "NOPE");

@@ -4,11 +4,14 @@ import { env } from "cloudflare:workers";
 import { listModels } from "../../../lib/stock-research/sotp/store.ts";
 import { computeTotals } from "../../../lib/stock-research/sotp/model.ts";
 import { cur, formatNumber, formatPrice } from "../../../lib/stock-research/format.ts";
+import { readCookie, writeAuthorized } from "../../../lib/write-gate.ts";
 
 export const prerender = false;
 
 const models = await listModels(env.STOCK_CACHE);
-const writeToken = env.SOTP_WRITE_TOKEN ?? "";
+const secret = env.SOTP_WRITE_TOKEN ?? "";
+const canWrite = writeAuthorized(secret, readCookie(Astro.request.headers.get("cookie"), "sotp_write"));
+const writeToken = canWrite ? secret : "";
 const url = new URL(Astro.request.url);
 const deleted = url.searchParams.get("deleted") === "1";
 ---
@@ -17,7 +20,7 @@ const deleted = url.searchParams.get("deleted") === "1";
 <head>
 	<meta charset="utf-8" />
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-	<meta name="viewport" content="width=device-width" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<meta name="description" content="Valuation Lab — manual sum-of-the-parts valuation for any company, listed or not." />
 	<title>Valuation Lab</title>
 	<script is:inline type="module" src="https://cdn.jsdelivr.net/npm/iconify-icon@1/dist/iconify-icon.min.js"></script>
@@ -32,6 +35,19 @@ const deleted = url.searchParams.get("deleted") === "1";
 			<p class="text-[color:var(--paper-dim)] mt-1 ml-11">
 				Manually value any company, listed or not: list its parts, estimate each, divide by shares outstanding.
 			</p>
+			{!canWrite && (
+				<form method="POST" action="/projects/valuation-lab/actions" class="mt-4 flex flex-wrap items-end gap-2 max-w-xl">
+					<input type="hidden" name="action" value="unlock" />
+					<input type="hidden" name="next" value="/projects/valuation-lab" />
+					<label class="block flex-grow">
+						<span class="block text-xs font-semibold uppercase tracking-wider text-[color:var(--paper-dim)] mb-1">Unlock edits</span>
+						<input type="password" name="writeToken" autocomplete="current-password" required
+							class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)]" />
+					</label>
+					<button type="submit" class="px-4 py-2 border border-[color:var(--ink-600)] rounded-lg text-sm font-semibold hover:border-[color:var(--accent)] transition">Unlock</button>
+				</form>
+			)}
+			{!canWrite && <p class="text-xs text-[color:var(--paper-muted)] mt-2">Models below are read-only until edits are unlocked.</p>}
 		</div>
 
 		{deleted && (
@@ -44,6 +60,7 @@ const deleted = url.searchParams.get("deleted") === "1";
 		<form id="sotp-create" method="POST" action="/projects/valuation-lab/actions" class="mb-8 bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6 shadow-sm max-w-2xl">
 			<input type="hidden" name="action" value="create" />
 			{writeToken && <input type="hidden" name="writeToken" value={writeToken} />}
+			<fieldset disabled={!canWrite} class="border-0 p-0 m-0 min-w-0">
 			<h2 class="text-lg font-bold text-[color:var(--paper)] mb-4">New model</h2>
 			<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
 				<label class="sm:col-span-2 block">
@@ -70,6 +87,7 @@ const deleted = url.searchParams.get("deleted") === "1";
 				<iconify-icon icon="mdi:plus"></iconify-icon>
 				Create model
 			</button>
+			</fieldset>
 		</form>
 
 		<!-- Saved models -->

@@ -36,8 +36,20 @@ const url = new URL(Astro.request.url);
 const filterSearchId = url.searchParams.get("search_id") || "all";
 const listingId = url.searchParams.get("listing_id") || "";
 const textQuery = url.searchParams.get("q") || "";
-const sortOption = url.searchParams.get("sort") || "score_desc";
+const sortOption = url.searchParams.get("sort") || "deal_score_desc";
 const timeOption = url.searchParams.get("time") || "all";
+const PAGE_SIZE = 25;
+let page = Number.parseInt(url.searchParams.get("page") || "1", 10);
+if (!Number.isFinite(page) || page < 1) page = 1;
+let totalDeals = 0;
+let totalPages = 1;
+const pageHref = (p: number): string => {
+  const params = new URLSearchParams(url.searchParams);
+  if (p <= 1) params.delete("page");
+  else params.set("page", String(p));
+  const s = params.toString();
+  return s ? `/projects/carousell-bot?${s}` : "/projects/carousell-bot";
+};
 
 if (db) {
     // 1. Fetch available searches for the dropdown filter
@@ -76,6 +88,17 @@ if (db) {
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : "";
 
+    if (!listingId) {
+        const countQuery = `SELECT COUNT(*) as n FROM listings l JOIN listing_analysis a ON l.listing_id = a.listing_id ${whereSql}`;
+        let countStmt = db.prepare(countQuery);
+        if (queryArgs.length > 0) countStmt = countStmt.bind(...queryArgs);
+        const countRow = await countStmt.first<{ n: number }>();
+        totalDeals = Number(countRow?.n ?? 0);
+        totalPages = Math.max(1, Math.ceil(totalDeals / PAGE_SIZE));
+        if (page > totalPages) page = totalPages;
+    }
+    const offset = (page - 1) * PAGE_SIZE;
+
     // Determine the ORDER BY clause (keys must match the sort <select> values
     // and the th[data-sort] column prefixes + _asc/_desc toggles below)
     let orderBySql = "ORDER BY a.deal_score DESC";
@@ -109,13 +132,13 @@ if (db) {
 		JOIN listing_analysis a ON l.listing_id = a.listing_id
 		${whereSql}
 		${orderBySql}
-		LIMIT 200
+		${listingId ? "LIMIT 1" : "LIMIT ? OFFSET ?"}
 	`;
 
-    // 3. Execute the custom statement
+    const pageArgs = listingId ? queryArgs : [...queryArgs, PAGE_SIZE, offset];
     let statement = db.prepare(query);
-    if (queryArgs.length > 0) {
-        statement = statement.bind(...queryArgs);
+    if (pageArgs.length > 0) {
+        statement = statement.bind(...pageArgs);
     }
 
 	const result = await statement.all();
@@ -159,7 +182,7 @@ const formatDate = (dateStr: string) => {
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="viewport" content="width=device-width" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="description" content="AI-driven Carousell deal monitor — intrinsic value tracking for Singapore PC listings." />
 		<title>Carousell Deals Dashboard</title>
 		<script is:inline type="module" src="https://cdn.jsdelivr.net/npm/iconify-icon@1/dist/iconify-icon.min.js"></script>
@@ -181,16 +204,12 @@ const formatDate = (dateStr: string) => {
                         <iconify-icon icon="mdi:robot-excited-outline" class="text-[color:var(--accent)] text-4xl"></iconify-icon>
                         Deal Monitor
                     </h1>
-					<p class="text-[color:var(--paper-dim)] ml-1">AI-driven intrinsic value tracking</p>
+					<p class="text-[color:var(--paper-dim)] ml-1">Listings the monitor scored above zero. Deal score is its upside estimate, not a guarantee. 25 rows at a time.</p>
 				</div>
 				<div class="flex items-center gap-2">
-					<a href="/" class="flex gap-2 items-center px-4 py-2 text-[color:var(--paper-dim)] hover:text-[color:var(--accent)] rounded-lg text-sm transition font-semibold">
+					<a href="/" class="flex gap-2 items-center px-4 py-2 text-[color:var(--paper-dim)] hover:text-[color:var(--accent-light)] rounded-lg text-sm transition font-semibold">
 						<iconify-icon icon="mdi:arrow-left" class="text-lg"></iconify-icon>
 						Portfolio
-					</a>
-					<a href="/projects/carousell-bot/searches" class="flex gap-2 items-center px-4 py-2 border border-[color:var(--ink-600)] bg-[color:var(--ink-850)] hover:bg-[color:var(--ink-800)] hover:border-[color:var(--accent)] rounded-lg text-sm transition font-semibold shadow-sm">
-						<iconify-icon icon="mdi:cog" class="text-lg text-[color:var(--accent)]"></iconify-icon>
-						Settings
 					</a>
 				</div>
 			</div>
@@ -380,7 +399,14 @@ const formatDate = (dateStr: string) => {
 								))}
 							</tbody>
 						</table>
-					</div>
+						{totalPages > 1 && (
+						<nav class="mt-4 flex items-center justify-between gap-4 text-sm" aria-label="Deal pages">
+							<a href={pageHref(page - 1)} class={`px-3 py-1.5 rounded-md border border-[color:var(--ink-600)] ${page <= 1 ? "pointer-events-none opacity-40" : "hover:border-[color:var(--accent)]"}`}>Previous</a>
+							<p class="text-[color:var(--paper-dim)]">Page {page} of {totalPages} · {totalDeals} deals</p>
+							<a href={pageHref(page + 1)} class={`px-3 py-1.5 rounded-md border border-[color:var(--ink-600)] ${page >= totalPages ? "pointer-events-none opacity-40" : "hover:border-[color:var(--accent)]"}`}>Next</a>
+						</nav>
+						)}
+						</div>
 				)}
 			</div>
 		</main>
@@ -408,6 +434,7 @@ const formatDate = (dateStr: string) => {
 
 					const url = new URL(window.location.href);
 					url.searchParams.set('sort', newSort);
+				url.searchParams.delete('page');
 					window.location.href = url.toString();
 					return;
 				}

@@ -5,7 +5,8 @@ export const me = {
 	phone: '+65 88012145',
 	summary: 'I\'m a Computer Science graduate with hands-on experience building production web applications in C# and ASP.NET Core, and strong fundamentals in backend systems programming with C/C++. I love building products that come to life — whether it is a graphics engine for a game, an embedded gateway service, or a data-heavy internal tool — and I\'m motivated by shipping software that works reliably in production.',
 	LinkedIn: 'https://www.linkedin.com/in/low-ee-loong/',
-	Email: 'mailto:eeloonglow@gmail.com'
+	Email: 'mailto:eeloonglow@gmail.com',
+	GitHub: 'https://github.com/04login'
 };
 
 export type Project = {
@@ -145,8 +146,7 @@ export const projects: Project[] = [
 		description: 'Co-developed The Deliverables, a top-down shooter game embodying the unforgiving nature of schools projects',
 		achievements: [
 			'Designed and implemented 5 unique weapons for enemies, enhancing gameplay diversity and user engagement by 15% based on player feedback',
-			'All code was written in the C programming language',
-			'Implemented 5 unique weapons while ensuring balanced gameplay based on playtesting data, resulting in a 15% increase in user engagement'
+			'All code was written in the C programming language'
 		],
 		technologies: ['C'],
 		link: null,
@@ -160,9 +160,8 @@ export const projects: Project[] = [
 		institution: 'Personal Project',
 		description: 'Designed and developed this personal portfolio website to showcase my projects and experience',
 		achievements: [
-			'Built with Astro and Tailwind CSS, ensuring a responsive and visually appealing design',
-			'Implemented a custom dark mode toggle, enhancing user experience and accessibility',
-			'Optimized for performance and SEO, resulting in a 20% increase in page load speed'
+			'Built with Astro and Tailwind CSS and deployed as a Cloudflare Worker',
+			'One ink-and-red palette across the portfolio and the live tools on this site'
 		],
 		technologies: ['Astro', 'Tailwind CSS', 'JavaScript'],
 		link: 'https://eeloonglow.com',
@@ -181,9 +180,9 @@ export const projects: Project[] = [
 			'Built deduplication and price-drop re-evaluation logic so previously seen listings are skipped unless price changes materially affect deal score',
 			'Designed batched LiteLLM orchestration across Gemini, Groq, and Qwen with graceful fallback and automated recovery from rate-limit or transient provider failures',
 			'Computed intrinsic value and deal score from extracted components, then persisted normalized listing plus analysis data into Cloudflare D1',
-			'Integrated local Windows Task Scheduler automation with a Cloudflare Pages dashboard (Astro) for continuous monitoring and admin search management'
+			'Integrated local Windows Task Scheduler automation with a Cloudflare Workers dashboard (Astro) for continuous monitoring and search management'
 		],
-		technologies: ['Python', 'curl_cffi', 'LiteLLM', 'Cloudflare D1', 'Cloudflare Pages', 'Astro', 'Tailwind CSS', 'Windows Task Scheduler'],
+		technologies: ['Python', 'curl_cffi', 'LiteLLM', 'Cloudflare D1', 'Cloudflare Workers', 'Astro', 'Tailwind CSS', 'Windows Task Scheduler'],
 		link: '/projects/carousell-bot',
 		featured: true
 	}
@@ -203,7 +202,7 @@ export const projects: Project[] = [
 		],
 		technologies: ['Astro', 'Tailwind CSS', 'Cloudflare Workers', 'Cloudflare KV', 'Yahoo Finance', 'SEC EDGAR', 'OpenRouter'],
 		link: '/projects/stocks',
-		featured: false
+		featured: true
 	}
 ];
 

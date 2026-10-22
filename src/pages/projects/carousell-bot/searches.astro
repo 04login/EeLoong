@@ -1,62 +1,86 @@
 ---
 import "../../../styles/global.css";
 import { env } from "cloudflare:workers";
+import { authCookieHeader, readCookie, writeAuthorized } from "../../../lib/write-gate.ts";
 
-// Ensure this is SSR
 export const prerender = false;
 
-// We need DB access
 let db = env?.DB || (Astro.locals as any)?.runtime?.env?.DB;
+const secret = env.CAROUSELL_WRITE_TOKEN;
+let canWrite = writeAuthorized(secret, readCookie(Astro.request.headers.get("cookie"), "carousell_write"));
 
 let successMessage = "";
 let errorMessage = "";
 
-if (Astro.request.method === "POST" && db) {
+if (Astro.request.method === "POST") {
+  let data: FormData;
   try {
-    const data = await Astro.request.formData();
-    const action = data.get("action");
+    data = await Astro.request.formData();
+  } catch {
+    return new Response("Bad request", { status: 400 });
+  }
+  const action = data.get("action")?.toString() ?? "";
 
-    if (action === "create") {
-      const name = data.get("name")?.toString();
-      const query = data.get("query")?.toString();
-      const min_price = data.get("min_price") ? Number(data.get("min_price")) : 1;
-      const max_price = data.get("max_price") ? Number(data.get("max_price")) : null;
-      const exclude_bumped = data.get("exclude_bumped") === "on";
-
-      if (!name || !query) {
-        throw new Error("Name and Query are required.");
-      }
-
-      await db.prepare(
-        `INSERT INTO monitored_searches (name, query, min_price, max_price, exclude_bumped) VALUES (?, ?, ?, ?, ?)`
-      ).bind(name, query, min_price, max_price, exclude_bumped ? 1 : 0).run();
-      
-      successMessage = "Search added successfully.";
-    } else if (action === "toggle") {
-      const search_id = data.get("search_id");
-      if (search_id) {
-        await db.prepare(
-          `UPDATE monitored_searches SET is_active = NOT is_active WHERE search_id = ?`
-        ).bind(search_id).run();
-        successMessage = "Search status toggled.";
-      }
-    } else if (action === "delete") {
-      const search_id = data.get("search_id");
-      if (search_id) {
-        await db.prepare(
-          `DELETE FROM monitored_searches WHERE search_id = ?`
-        ).bind(search_id).run();
-        successMessage = "Search deleted successfully.";
-      }
+  if (action === "unlock") {
+    const token = data.get("writeToken")?.toString() ?? "";
+    if (!writeAuthorized(secret, token)) {
+      errorMessage = "That token does not match, or admin writes are not configured.";
+    } else {
+      const secure = new URL(Astro.request.url).protocol === "https:";
+      return new Response(null, {
+        status: 303,
+        headers: {
+          Location: "/projects/carousell-bot/searches",
+          "Set-Cookie": authCookieHeader("carousell_write", secret!, secure, "/projects/carousell-bot"),
+        },
+      });
     }
-  } catch (error: any) {
-    console.error("Form error:", error);
-    errorMessage = error.message || "An error occurred while processing the request.";
+  } else if (!canWrite || !db) {
+    return new Response("Writes are disabled.", { status: 403 });
+  } else {
+    try {
+      if (action === "create") {
+        const name = data.get("name")?.toString();
+        const query = data.get("query")?.toString();
+        const min_price = data.get("min_price") ? Number(data.get("min_price")) : 1;
+        const max_price = data.get("max_price") ? Number(data.get("max_price")) : null;
+        const exclude_bumped = data.get("exclude_bumped") === "on";
+
+        if (!name || !query) {
+          throw new Error("Name and Query are required.");
+        }
+
+        await db.prepare(
+          `INSERT INTO monitored_searches (name, query, min_price, max_price, exclude_bumped) VALUES (?, ?, ?, ?, ?)`
+        ).bind(name, query, min_price, max_price, exclude_bumped ? 1 : 0).run();
+
+        successMessage = "Search added successfully.";
+      } else if (action === "toggle") {
+        const search_id = data.get("search_id");
+        if (search_id) {
+          await db.prepare(
+            `UPDATE monitored_searches SET is_active = NOT is_active WHERE search_id = ?`
+          ).bind(search_id).run();
+          successMessage = "Search status toggled.";
+        }
+      } else if (action === "delete") {
+        const search_id = data.get("search_id");
+        if (search_id) {
+          await db.prepare(
+            `DELETE FROM monitored_searches WHERE search_id = ?`
+          ).bind(search_id).run();
+          successMessage = "Search deleted successfully.";
+        }
+      }
+    } catch (error: any) {
+      console.error("Form error:", error);
+      errorMessage = error.message || "An error occurred while processing the request.";
+    }
   }
 }
 
 let searches: any[] = [];
-if (db) {
+if (canWrite && db) {
   try {
     const result = await db.prepare(
       `SELECT search_id, name, query, min_price, max_price, is_active, exclude_bumped FROM monitored_searches ORDER BY created_at DESC`
@@ -82,7 +106,8 @@ if (!db && import.meta.env.DEV) {
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="viewport" content="width=device-width" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="robots" content="noindex" />
 		<meta name="description" content="Manage Carousell Deal Monitor scraper searches." />
 		<title>Manage Searches - Carousell Deal Monitor</title>
 		<script type="module" src="https://cdn.jsdelivr.net/npm/iconify-icon@1/dist/iconify-icon.min.js"></script>
@@ -98,7 +123,7 @@ if (!db && import.meta.env.DEV) {
                         </a>
                     </div>
 					<h1 class="text-3xl font-bold text-[color:var(--paper)]">Manage Searches</h1>
-					<p class="text-[color:var(--paper-dim)]">Configure scraper parameters mapped directly to D1 Database</p>
+					<p class="text-[color:var(--paper-dim)]">Configure scraper parameters. Not linked from the public dashboard.</p>
 				</div>
 			</div>
 
@@ -120,6 +145,17 @@ if (!db && import.meta.env.DEV) {
                 </div>
             )}
 			
+			{!canWrite ? (
+				<form method="POST" class="max-w-md bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-6">
+					<h2 class="text-lg font-bold text-[color:var(--paper)] mb-2">Admin locked</h2>
+					<p class="text-sm text-[color:var(--paper-muted)] mb-4">Search configuration is not shown on the public site.</p>
+					{errorMessage && <p class="text-sm text-[color:var(--accent-light)] mb-3">{errorMessage}</p>}
+					<input type="hidden" name="action" value="unlock" />
+					<label class="block text-xs font-semibold uppercase tracking-wider text-[color:var(--paper-dim)] mb-1" for="writeToken">Admin token</label>
+					<input type="password" id="writeToken" name="writeToken" required autocomplete="current-password" class="w-full bg-[color:var(--ink-900)] border border-[color:var(--ink-700)] rounded-md px-3 py-2 text-[color:var(--paper)] focus:outline-none focus:border-[color:var(--accent)]" />
+					<button type="submit" class="mt-4 px-4 py-2 bg-[color:var(--accent)] hover:bg-[color:var(--accent-light)] text-white font-semibold rounded-md text-sm">Unlock</button>
+				</form>
+			) : (
 			<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
 			    <div class="lg:col-span-1">
                     <div class="bg-[color:var(--ink-850)] border border-[color:var(--ink-600)] rounded-xl p-5 sticky top-8">
@@ -244,6 +280,7 @@ if (!db && import.meta.env.DEV) {
                     </div>
                 </div>
 			</div>
+			)}
 		</main>
 	</body>
 </html>

@@ -12,6 +12,7 @@ import { latestPeriodic, fetchBalanceSheetFacts } from "../sources/edgar.ts";
 import { slugify, uniqueSlug } from "./slug.ts";
 import { sanitizeModel, parseModelForm, seedPartsFromSegments, type SotpModel, type SotpPart } from "./model.ts";
 import { getModel, putModel, deleteModel, takenSlugs } from "./store.ts";
+import { writeAuthorized } from "../../write-gate.ts";
 
 export type SotpActionEnv = LlmEnv & { SOTP_WRITE_TOKEN?: string };
 
@@ -96,11 +97,10 @@ export async function handleSotpAction(
     opts.segmentSource ?? ((e: SotpActionEnv, k: KVNamespace | undefined, t: string) => getSegments(e, k, t));
   const action = String(fd.get("action") ?? "").trim();
 
-  // Write token: when the secret is configured, every mutating request must
-  // carry it. A speed bump against drive-by bots — NOT real auth (the token is
-  // necessarily rendered into the page HTML for the legitimate user too).
-  const token = env.SOTP_WRITE_TOKEN;
-  if (token && String(fd.get("writeToken") ?? "") !== token) {
+  // Fail closed. An unset secret rejects every write (the old "unset → open"
+  // path is how the public lab was editable). The page only embeds the token
+  // after an HttpOnly cookie unlock — see valuation-lab/actions.ts.
+  if (!writeAuthorized(env.SOTP_WRITE_TOKEN, String(fd.get("writeToken") ?? ""))) {
     return { status: 403, error: "Invalid or missing write token." };
   }
 

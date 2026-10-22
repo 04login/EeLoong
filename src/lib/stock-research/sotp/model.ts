@@ -225,9 +225,9 @@ export const computeBridge = (
   equityValue: number;
   perShare: number | null;
 } => {
-  const netDebt = Number.isFinite(bridge?.netDebt) ? bridge.netDebt! : 0;
-  const minority = Number.isFinite(bridge?.minorityInterests) ? bridge.minorityInterests! : 0;
-  const preferred = Number.isFinite(bridge?.preferred) ? bridge.preferred! : 0;
+  const netDebt = Number.isFinite(bridge?.netDebt) ? (bridge!.netDebt as number) : 0;
+  const minority = Number.isFinite(bridge?.minorityInterests) ? (bridge!.minorityInterests as number) : 0;
+  const preferred = Number.isFinite(bridge?.preferred) ? (bridge!.preferred as number) : 0;
   const afterNetDebt = round12(partsTotal - netDebt);
   const afterInterests = round12(afterNetDebt - minority - preferred);
   const sotpPct = validPct(bridge?.sotpDiscountPct, 0, 30);
